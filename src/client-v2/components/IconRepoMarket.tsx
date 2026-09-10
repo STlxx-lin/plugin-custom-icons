@@ -16,6 +16,9 @@ import {
   Spin,
   Divider,
   Empty,
+  Modal,
+  Progress,
+  InputNumber,
 } from 'antd';
 import {
   DownloadOutlined,
@@ -30,6 +33,9 @@ import {
   GlobalOutlined,
   AppstoreOutlined,
   CompassOutlined,
+  PlayCircleOutlined,
+  PauseCircleOutlined,
+  ForwardOutlined,
 } from '@ant-design/icons';
 import { customIconsManager } from '../services/custom-icons-manager';
 import { sanitizeAndFormatSvg } from '../utils/svg-helper';
@@ -121,6 +127,16 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
   const [probing, setProbing] = useState<boolean>(false);
   const [probeResult, setProbeResult] = useState<ProbeResult | null>(null);
 
+  // Iconmonstr 分页面全量实时拉取控制状态
+  const [crawlModalVisible, setCrawlModalVisible] = useState<boolean>(false);
+  const [crawlStartPage, setCrawlStartPage] = useState<number>(1);
+  const [crawlEndPage, setCrawlEndPage] = useState<number>(80);
+  const [crawlRunning, setCrawlRunning] = useState<boolean>(false);
+  const [crawlCurrentPage, setCrawlCurrentPage] = useState<number>(1);
+  const [crawlTotalInstalled, setCrawlTotalInstalled] = useState<number>(0);
+  const [crawlLogText, setCrawlLogText] = useState<string>('');
+  const stopCrawlRef = React.useRef<boolean>(false);
+
   const fetchRepos = async () => {
     if (!apiClient) return;
     setLoading(true);
@@ -185,6 +201,10 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
     categoryName?: string,
     iconCount?: number,
   ) => {
+    if (repoKey === 'iconmonstr') {
+      openIconmonstrCrawlModal(0);
+      return;
+    }
     setOperatingKey(repoKey);
     const hideMsg = message.loading(`正在从 Iconify / CDN 高速下载并解析 [${title}]，请稍候...`, 0);
     try {
@@ -230,6 +250,84 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
       hideMsg();
       setOperatingKey(null);
     }
+  };
+
+  // 打开 Iconmonstr 分页面抓取面板
+  const openIconmonstrCrawlModal = (currentInstalledCount = 0) => {
+    setCrawlTotalInstalled(currentInstalledCount);
+    const estimatedNextPage = Math.min(80, Math.floor(currentInstalledCount / 60) + 1);
+    setCrawlStartPage(estimatedNextPage);
+    setCrawlCurrentPage(estimatedNextPage);
+    setCrawlEndPage(80);
+    setCrawlLogText(`就绪：准备从第 ${estimatedNextPage} 页爬取至第 80 页（当前本地已入库 ${currentInstalledCount} 款）\n`);
+    setCrawlModalVisible(true);
+  };
+
+  // 开始执行分页面连续爬取
+  const handleStartCrawl = async () => {
+    if (crawlStartPage > crawlEndPage) {
+      message.warning('起始页码不能大于结束页码');
+      return;
+    }
+    setCrawlRunning(true);
+    stopCrawlRef.current = false;
+    let accumulated = crawlTotalInstalled;
+
+    for (let p = crawlStartPage; p <= crawlEndPage; p++) {
+      if (stopCrawlRef.current) {
+        setCrawlLogText((prev) => `[已暂停] 任务已手动暂停，当前停留于第 ${p - 1} 页。\n` + prev);
+        break;
+      }
+      setCrawlCurrentPage(p);
+      setCrawlLogText((prev) => `[${new Date().toLocaleTimeString()}] 正在抓取第 ${p} / ${crawlEndPage} 页 (每页约60款，请稍候)...\n` + prev);
+      try {
+        let res: any = null;
+        const reqData = { repoKey: 'iconmonstr', page: p, category: 'iconmonstr' };
+        try {
+          res = await apiClient.request({
+            url: 'customIconRepos:crawlPage',
+            method: 'post',
+            data: reqData,
+          });
+        } catch (e) {
+          res = await apiClient.request({
+            url: 'custom_icon_repos:crawlPage',
+            method: 'post',
+            data: reqData,
+          });
+        }
+
+        const resData = res?.data?.data || res?.data || {};
+        accumulated = resData.totalInstalled || (accumulated + (resData.pageItemCount || 0));
+        setCrawlTotalInstalled(accumulated);
+        setCrawlLogText(
+          (prev) =>
+            `[${new Date().toLocaleTimeString()}] ✓ 第 ${p} 页完成！本页拉取: ${resData.pageItemCount || 0} 款，当前累计已入库: ${accumulated} 款\n` + prev,
+        );
+
+        if (resData.hasNextPage === false) {
+          setCrawlLogText((prev) => `[${new Date().toLocaleTimeString()}] 🏁 已检测到官方末页，全量爬取完成！\n` + prev);
+          break;
+        }
+
+        await new Promise((r) => setTimeout(r, 200));
+      } catch (err: any) {
+        setCrawlLogText(
+          (prev) => `[${new Date().toLocaleTimeString()}] ⚠ 第 ${p} 页请求出错: ${err?.response?.data?.message || err?.message}，继续下一页...\n` + prev,
+        );
+      }
+    }
+
+    setCrawlRunning(false);
+    await customIconsManager.loadIcons(apiClient);
+    await fetchRepos();
+    if (onRepoChanged) onRepoChanged();
+  };
+
+  // 暂停爬取
+  const handleStopCrawl = () => {
+    stopCrawlRef.current = true;
+    setCrawlRunning(false);
   };
 
   // 卸载已安装的仓库
@@ -610,21 +708,31 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
                 >
                   官方预览
                 </Button>
-                <Button
-                  type="primary"
-                  icon={operatingKey === probeResult.prefix ? <SyncOutlined spin /> : <DownloadOutlined />}
-                  loading={operatingKey === probeResult.prefix}
-                  onClick={() =>
-                    handleInstall(
-                      probeResult.prefix,
-                      probeResult.title,
-                      probeResult.category,
-                      probeResult.total,
-                    )
-                  }
-                >
-                  确认导入并安装
-                </Button>
+                {probeResult.prefix === 'iconmonstr' ? (
+                  <Button
+                    type="primary"
+                    icon={<CloudDownloadOutlined />}
+                    onClick={() => openIconmonstrCrawlModal(0)}
+                  >
+                    分页面拉取所有页面
+                  </Button>
+                ) : (
+                  <Button
+                    type="primary"
+                    icon={operatingKey === probeResult.prefix ? <SyncOutlined spin /> : <DownloadOutlined />}
+                    loading={operatingKey === probeResult.prefix}
+                    onClick={() =>
+                      handleInstall(
+                        probeResult.prefix,
+                        probeResult.title,
+                        probeResult.category,
+                        probeResult.total,
+                      )
+                    }
+                  >
+                    确认导入并安装
+                  </Button>
+                )}
               </Space>
             </div>
 
@@ -846,7 +954,31 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
                     </Button>
 
                     <Space>
-                      {isInstalled ? (
+                      {repo.key === 'iconmonstr' ? (
+                        <>
+                          <Button
+                            type="primary"
+                            icon={<CloudDownloadOutlined />}
+                            onClick={() => openIconmonstrCrawlModal(repo.installedCount || 0)}
+                          >
+                            {isInstalled ? '分页面拉取更多页面' : '分页面拉取所有页面'}
+                          </Button>
+                          {isInstalled ? (
+                            <Popconfirm
+                              title={`确认卸载 [${repo.title}]？`}
+                              description="卸载后将清空已导入的该库图标（不影响用户手动上传的图标）。"
+                              okText="卸载"
+                              cancelText="取消"
+                              okButtonProps={{ danger: true }}
+                              onConfirm={() => handleUninstall(repo.key, repo.title)}
+                            >
+                              <Button danger icon={<DeleteOutlined />} loading={isOperating}>
+                                一键卸载
+                              </Button>
+                            </Popconfirm>
+                          ) : null}
+                        </>
+                      ) : isInstalled ? (
                         <>
                           {repo.installedCount && repo.iconCount && repo.installedCount < repo.iconCount ? (
                             <Button
@@ -894,6 +1026,205 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
         </Row>
         )}
       </Spin>
+
+      {/* Iconmonstr 分页面全量实时拉取进度弹窗 */}
+      <Modal
+        title={
+          <Space>
+            <CloudDownloadOutlined style={{ color: '#1677ff', fontSize: 20 }} />
+            <span>Iconmonstr 官方图标库 · 分页面实时拉取</span>
+          </Space>
+        }
+        open={crawlModalVisible}
+        onCancel={() => {
+          if (crawlRunning) {
+            handleStopCrawl();
+          }
+          setCrawlModalVisible(false);
+        }}
+        footer={null}
+        width={680}
+        destroyOnClose={false}
+      >
+        <div style={{ marginTop: 8 }}>
+          <Alert
+            type="info"
+            showIcon
+            message="分页面在线爬取机制"
+            description="Iconmonstr 官方全站约 4,784 款矢量图标分布于 80 页。系统采用单页原子爬取（每页约 60 款，耗时约 10 秒），绝不超时，支持随时暂停、断点续传。"
+            style={{ marginBottom: 16 }}
+          />
+
+          {/* 页码与预设档位 */}
+          <div
+            style={{
+              background: '#fafafa',
+              padding: 16,
+              borderRadius: 8,
+              marginBottom: 16,
+              border: '1px solid #f0f0f0',
+            }}
+          >
+            <div
+              style={{
+                marginBottom: 12,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 8,
+              }}
+            >
+              <Text strong>快捷拉取档位：</Text>
+              <Space wrap>
+                <Button
+                  size="small"
+                  disabled={crawlRunning}
+                  onClick={() => {
+                    setCrawlStartPage(1);
+                    setCrawlEndPage(1);
+                  }}
+                >
+                  精选 1 页 (60款)
+                </Button>
+                <Button
+                  size="small"
+                  disabled={crawlRunning}
+                  onClick={() => {
+                    setCrawlStartPage(1);
+                    setCrawlEndPage(5);
+                  }}
+                >
+                  前 5 页 (~300款)
+                </Button>
+                <Button
+                  size="small"
+                  disabled={crawlRunning}
+                  onClick={() => {
+                    setCrawlStartPage(1);
+                    setCrawlEndPage(20);
+                  }}
+                >
+                  前 20 页 (~1,200款)
+                </Button>
+                <Button
+                  size="small"
+                  type="primary"
+                  ghost
+                  disabled={crawlRunning}
+                  onClick={() => {
+                    setCrawlStartPage(1);
+                    setCrawlEndPage(80);
+                  }}
+                >
+                  全量 80 页 (~4,784款)
+                </Button>
+              </Space>
+            </div>
+
+            <Row gutter={16} align="middle">
+              <Col span={12}>
+                <Space align="center">
+                  <Text type="secondary">起始页码：</Text>
+                  <InputNumber
+                    min={1}
+                    max={80}
+                    value={crawlStartPage}
+                    disabled={crawlRunning}
+                    onChange={(val) => setCrawlStartPage(val || 1)}
+                  />
+                </Space>
+              </Col>
+              <Col span={12}>
+                <Space align="center">
+                  <Text type="secondary">结束页码：</Text>
+                  <InputNumber
+                    min={1}
+                    max={80}
+                    value={crawlEndPage}
+                    disabled={crawlRunning}
+                    onChange={(val) => setCrawlEndPage(val || 80)}
+                  />
+                  <Text type="secondary">(官网共 80 页)</Text>
+                </Space>
+              </Col>
+            </Row>
+          </div>
+
+          {/* 进度条与实时状态 */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <Text strong>
+                {crawlRunning
+                  ? `正在抓取第 ${crawlCurrentPage} / ${crawlEndPage} 页...`
+                  : `准备抓取第 ${crawlStartPage} 至 ${crawlEndPage} 页`}
+              </Text>
+              <Text type="secondary">
+                数据库累计入库：<Text strong style={{ color: '#52c41a' }}>{crawlTotalInstalled}</Text> 款图标
+              </Text>
+            </div>
+            <Progress
+              percent={
+                crawlEndPage >= crawlStartPage
+                  ? Math.min(
+                      100,
+                      Math.round(
+                        ((Math.max(crawlStartPage, crawlCurrentPage) - crawlStartPage + (crawlRunning ? 0.5 : 1)) /
+                          (crawlEndPage - crawlStartPage + 1)) *
+                          100,
+                      ),
+                    )
+                  : 0
+              }
+              status={crawlRunning ? 'active' : 'normal'}
+              strokeColor={{
+                from: '#108ee9',
+                to: '#87d068',
+              }}
+            />
+          </div>
+
+          {/* 实时控制台输出 */}
+          <div style={{ marginBottom: 18 }}>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              实时抓取日志：
+            </Text>
+            <Input.TextArea
+              value={crawlLogText}
+              readOnly
+              rows={5}
+              style={{
+                marginTop: 4,
+                fontFamily: 'monospace',
+                fontSize: 12,
+                backgroundColor: '#1e1e1e',
+                color: '#d4d4d4',
+              }}
+            />
+          </div>
+
+          {/* 底部控制按钮 */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+            {crawlRunning ? (
+              <Button danger icon={<PauseCircleOutlined />} onClick={handleStopCrawl}>
+                暂停抓取
+              </Button>
+            ) : (
+              <Button type="primary" icon={<PlayCircleOutlined />} onClick={handleStartCrawl}>
+                {crawlLogText.includes('已手动暂停') ? '继续抓取' : '开始分页面实时抓取'}
+              </Button>
+            )}
+            <Button
+              onClick={() => {
+                if (crawlRunning) handleStopCrawl();
+                setCrawlModalVisible(false);
+              }}
+            >
+              {crawlRunning ? '中止并关闭' : '关闭'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

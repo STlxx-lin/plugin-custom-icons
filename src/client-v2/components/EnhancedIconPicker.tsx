@@ -968,7 +968,7 @@ export const EnhancedIconPicker = connect(
     const { name, color, size } = parseIconValue(props.value);
     return (
       <RenderPreviewIcon
-        name={name || props.value}
+        name={name || props.value || ''}
         color={color}
         size={size}
       />
