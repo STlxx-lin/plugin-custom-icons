@@ -486,6 +486,7 @@ export interface IconPaginationSettings {
   threshold: number;
   pageSize: number;
   marketPreviewCount?: number;
+  popoverWidth?: string;
   subCategories?: Record<string, SubCategoryRule[]>;
 }
 
@@ -494,6 +495,7 @@ const DEFAULT_PAGINATION_SETTINGS: IconPaginationSettings = {
   threshold: 500,
   pageSize: 200,
   marketPreviewCount: 5,
+  popoverWidth: 'adaptive',
 };
 
 export function readPaginationSettings(): IconPaginationSettings {
@@ -506,6 +508,7 @@ export function readPaginationSettings(): IconPaginationSettings {
         threshold: typeof data.threshold === 'number' ? data.threshold : 500,
         pageSize: typeof data.pageSize === 'number' ? data.pageSize : 200,
         marketPreviewCount: typeof data.marketPreviewCount === 'number' ? data.marketPreviewCount : 5,
+        popoverWidth: typeof data.popoverWidth === 'string' && data.popoverWidth ? data.popoverWidth : 'adaptive',
         subCategories: data.subCategories && typeof data.subCategories === 'object' ? data.subCategories : undefined,
       };
     }
@@ -525,6 +528,7 @@ export function writePaginationSettings(settings: Partial<IconPaginationSettings
       typeof settings.marketPreviewCount === 'number'
         ? Math.min(30, Math.max(1, settings.marketPreviewCount))
         : (current.marketPreviewCount || 5),
+    popoverWidth: typeof settings.popoverWidth === 'string' && settings.popoverWidth.trim() ? settings.popoverWidth.trim() : (current.popoverWidth || 'adaptive'),
     subCategories: settings.subCategories !== undefined ? settings.subCategories : current.subCategories,
   };
   try {

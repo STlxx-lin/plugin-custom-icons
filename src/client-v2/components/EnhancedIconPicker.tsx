@@ -55,6 +55,7 @@ export interface IconPickerProps {
   searchable?: boolean;
   onChangeComplete?: (value: string | null) => void;
   apiClient?: any;
+  popoverWidth?: string;
 }
 
 interface IconPickerReadPrettyProps {
@@ -650,8 +651,26 @@ function EnhancedIconField(props: IconPickerProps) {
   };
 
   const showSubSidebar = currentSubCategories.length > 1 && !searchVal.trim();
+  const effectiveWidthConfig = props.popoverWidth || paginationConfig.popoverWidth || 'adaptive';
+
+  let resolvedWidth: string = showSubSidebar ? 'clamp(35em, 52vw, 54em)' : 'clamp(28em, 42vw, 46em)';
+  if (effectiveWidthConfig && effectiveWidthConfig !== 'adaptive') {
+    if (effectiveWidthConfig === 'standard') {
+      resolvedWidth = showSubSidebar ? '35em' : '28em';
+    } else if (effectiveWidthConfig === 'wide') {
+      resolvedWidth = showSubSidebar ? '44em' : '36em';
+    } else if (effectiveWidthConfig === 'extra-wide') {
+      resolvedWidth = showSubSidebar ? '54em' : '44em';
+    } else if (effectiveWidthConfig === 'compact') {
+      resolvedWidth = showSubSidebar ? '30em' : '24em';
+    } else {
+      resolvedWidth = effectiveWidthConfig;
+    }
+  }
+
   const containerStyle: React.CSSProperties = {
-    width: showSubSidebar ? '35em' : '28em',
+    width: resolvedWidth,
+    maxWidth: 'calc(100vw - 24px)',
     height: '22em',
     display: 'flex',
     overflow: 'hidden',
@@ -665,6 +684,7 @@ function EnhancedIconField(props: IconPickerProps) {
         <Popover
           placement="bottomLeft"
           open={visible}
+          overlayStyle={{ maxWidth: 'calc(100vw - 24px)' }}
           onOpenChange={(val) => {
             if (disabled) return;
             setVisible(val);
@@ -679,7 +699,7 @@ function EnhancedIconField(props: IconPickerProps) {
                     placeholder="搜索图标名称或标识..."
                     allowClear
                     size="middle"
-                    style={{ flex: 1, height: 32 }}
+                    style={{ flex: 1, height: 32, minWidth: 120 }}
                     onChange={(e) => handleSearch(e.target.value)}
                   />
                 )}
@@ -689,7 +709,7 @@ function EnhancedIconField(props: IconPickerProps) {
                     value={activeTab}
                     onChange={(val) => setActiveTab(val)}
                     options={categorySelectOptions}
-                    style={{ width: 190, height: 32 }}
+                    style={{ width: 190, height: 32, flexShrink: 0 }}
                     popupMatchSelectWidth={false}
                     showSearch
                     placeholder="搜索或选择分类"
@@ -708,7 +728,7 @@ function EnhancedIconField(props: IconPickerProps) {
                     type="dashed"
                     size="middle"
                     icon={<PlusOutlined />}
-                    style={{ height: 32 }}
+                    style={{ height: 32, flexShrink: 0 }}
                     onClick={() => setModalOpen(true)}
                   >
                     导入

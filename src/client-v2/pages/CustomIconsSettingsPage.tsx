@@ -81,7 +81,7 @@ export const CustomIconsSettingsPage: React.FC<{ api: any }> = ({ api }) => {
 
   const handleResetPaginationSettings = () => {
     setPaginationSettings({ ...DEFAULT_PAGINATION_CONFIG });
-    message.info('已重置为系统推荐默认值（开启分页、阈值 500、每页 200），请点击「保存配置」完成持久化。');
+    message.info('已重置为系统推荐默认值（开启分页、阈值 500、每页 200、自适应宽度），请点击「保存配置」完成持久化。');
   };
 
   const handleDelete = async (record: CustomIconItem) => {
@@ -390,6 +390,54 @@ export const CustomIconsSettingsPage: React.FC<{ api: any }> = ({ api }) => {
                           addonAfter="款"
                         />
                       </div>
+
+                      <Divider style={{ margin: '4px 0' }} />
+
+                      {/* 5. 图标选择器浮层宽度配置 */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 14 }}>图标选择器弹窗宽度 (Popover Width)</div>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            配置全站图标选择器弹窗浮层的显示宽度。支持自适应伸缩（根据屏幕与子分类自动计算最佳视野）、预设宽度规格或自定义 CSS 宽度。
+                          </Text>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <Select
+                            value={
+                              ['adaptive', 'standard', 'wide', 'extra-wide', 'compact'].includes(paginationSettings.popoverWidth || 'adaptive')
+                                ? (paginationSettings.popoverWidth || 'adaptive')
+                                : 'custom'
+                            }
+                            onChange={(val) => {
+                              if (val === 'custom') {
+                                setPaginationSettings((prev) => ({ ...prev, popoverWidth: '45em' }));
+                              } else {
+                                setPaginationSettings((prev) => ({ ...prev, popoverWidth: val }));
+                              }
+                            }}
+                            style={{ width: 170 }}
+                            options={[
+                              { label: '⚡ 自适应伸缩 (推荐)', value: 'adaptive' },
+                              { label: '📏 标准 (35em / 28em)', value: 'standard' },
+                              { label: '🖼️ 宽屏大视野 (44em)', value: 'wide' },
+                              { label: '🖥️ 全景超宽 (54em)', value: 'extra-wide' },
+                              { label: '📱 紧凑模式 (30em)', value: 'compact' },
+                              { label: '✏️ 自定义宽度', value: 'custom' },
+                            ]}
+                          />
+                          {!['adaptive', 'standard', 'wide', 'extra-wide', 'compact'].includes(paginationSettings.popoverWidth || 'adaptive') && (
+                            <Input
+                              placeholder="例如: 45em 或 600px"
+                              value={paginationSettings.popoverWidth}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setPaginationSettings((prev) => ({ ...prev, popoverWidth: v }));
+                              }}
+                              style={{ width: 130 }}
+                            />
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     <div
@@ -430,7 +478,7 @@ export const CustomIconsSettingsPage: React.FC<{ api: any }> = ({ api }) => {
                       <span style={{ fontSize: 13, color: '#595959' }}>点击右侧测试选择器：</span>
                       <EnhancedIconPicker apiClient={api} />
                       <Text type="secondary" style={{ fontSize: 12 }}>
-                        （在上方修改阈值或每页条数并保存后，直接点击此处打开，即可现场检验分页效果）
+                        （在上方修改弹窗宽度、阈值或每页条数并保存后，直接点击此处打开，即可现场检验弹窗宽度与分页效果）
                       </Text>
                     </div>
                   </Card>

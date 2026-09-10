@@ -22,6 +22,7 @@ export interface IconPaginationConfig {
   threshold: number;
   pageSize: number;
   marketPreviewCount?: number;
+  popoverWidth?: string;
 }
 
 export const DEFAULT_PAGINATION_CONFIG: IconPaginationConfig = {
@@ -29,6 +30,7 @@ export const DEFAULT_PAGINATION_CONFIG: IconPaginationConfig = {
   threshold: 500,
   pageSize: 200,
   marketPreviewCount: 5,
+  popoverWidth: 'adaptive',
 };
 
 export interface RawSubCategoryConfig {
@@ -397,6 +399,7 @@ class CustomIconsManager {
           threshold: typeof parsed.threshold === 'number' ? parsed.threshold : 500,
           pageSize: typeof parsed.pageSize === 'number' ? parsed.pageSize : 200,
           marketPreviewCount: typeof parsed.marketPreviewCount === 'number' ? parsed.marketPreviewCount : 5,
+          popoverWidth: typeof parsed.popoverWidth === 'string' && parsed.popoverWidth ? parsed.popoverWidth : 'adaptive',
         };
       }
     } catch (e) {}
@@ -426,6 +429,7 @@ class CustomIconsManager {
           threshold: typeof data.threshold === 'number' ? data.threshold : 500,
           pageSize: typeof data.pageSize === 'number' ? data.pageSize : 200,
           marketPreviewCount: typeof data.marketPreviewCount === 'number' ? data.marketPreviewCount : 5,
+          popoverWidth: typeof data.popoverWidth === 'string' && data.popoverWidth ? data.popoverWidth : 'adaptive',
         };
         if (typeof window !== 'undefined' && window.localStorage) {
           try {
@@ -453,6 +457,10 @@ class CustomIconsManager {
         typeof config.marketPreviewCount === 'number'
           ? Math.min(30, Math.max(1, config.marketPreviewCount))
           : (this.paginationConfig.marketPreviewCount || 5),
+      popoverWidth:
+        typeof config.popoverWidth === 'string' && config.popoverWidth.trim()
+          ? config.popoverWidth.trim()
+          : (this.paginationConfig.popoverWidth || 'adaptive'),
     };
     this.paginationConfig = nextConfig;
     if (typeof window !== 'undefined' && window.localStorage) {
