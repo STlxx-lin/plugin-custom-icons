@@ -125,7 +125,14 @@ export const createCustomIconsResource = (app: any, resourceName = 'custom_icons
         ctx.request.body?.name;
 
       if (filterByTk) {
-        await repo.destroy({ filterByTk });
+        if (Array.isArray(filterByTk) && filterByTk.length > 200) {
+          const CHUNK = 200;
+          for (let i = 0; i < filterByTk.length; i += CHUNK) {
+            await repo.destroy({ filterByTk: filterByTk.slice(i, i + CHUNK) });
+          }
+        } else {
+          await repo.destroy({ filterByTk });
+        }
       } else if (name) {
         await repo.destroy({ filter: { name: String(name).trim().toLowerCase() } });
       } else {

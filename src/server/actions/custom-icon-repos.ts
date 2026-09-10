@@ -15,7 +15,7 @@ export interface RepoDefinition {
   homepage: string;
   description: string;
   downloadUrl?: string;
-  sourceType: 'zip' | 'iconify' | 'iconmonstr';
+  sourceType: 'zip' | 'iconify' | 'iconmonstr' | 'iconfont';
   prefix?: string;
   iconCount: number;
   tags?: string[];
@@ -110,6 +110,80 @@ function fetchJson(url: string, timeout = 15000): Promise<any> {
     req.setTimeout(timeout, () => {
       req.destroy();
       reject(new Error('请求超时'));
+    });
+    req.on('error', reject);
+  });
+}
+
+/**
+ * 智能从输入中提取 Iconfont 合辑 ID (cid)
+ * 支持格式：
+ * - https://www.iconfont.cn/collections/detail?spm=...&cid=54546
+ * - https://www.iconfont.cn/collections/detail?cid=54546
+ * - https://www.iconfont.cn/api/collection/detail.json?id=54546
+ * - cid=54546 或 id=54546
+ * - 纯数字 54546
+ */
+export function extractIconfontCid(input: string): string | null {
+  if (!input || typeof input !== 'string') return null;
+  const str = input.trim();
+  if (/^\d+$/.test(str)) {
+    return str;
+  }
+  const cidMatch = str.match(/(?:cid|id)=(\d+)/i);
+  if (cidMatch) {
+    return cidMatch[1];
+  }
+  const pathMatch = str.match(/collections\/detail.*?(\d{3,})/i);
+  if (pathMatch) {
+    return pathMatch[1];
+  }
+  const anyNum = str.match(/(\d{4,9})/);
+  if (anyNum) {
+    return anyNum[1];
+  }
+  return null;
+}
+
+/**
+ * 获取 Iconfont 合辑详情及全部图标列表
+ */
+export async function fetchIconfontCollection(cid: string): Promise<any> {
+  const url = `https://www.iconfont.cn/api/collection/detail.json?id=${cid}`;
+  return new Promise((resolve, reject) => {
+    const req = https.get(
+      url,
+      {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Referer: `https://www.iconfont.cn/collections/detail?cid=${cid}`,
+          Accept: 'application/json, text/plain, */*',
+        },
+        timeout: 20000,
+      },
+      (res) => {
+        if (res.statusCode !== 200) {
+          return reject(new Error(`请求 Iconfont 失败，HTTP 状态码: ${res.statusCode}`));
+        }
+        let body = '';
+        res.on('data', (chunk) => (body += chunk));
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(body);
+            if (json.code !== 200) {
+              return reject(new Error(json.message || `Iconfont 接口返回错误码 ${json.code}`));
+            }
+            resolve(json.data);
+          } catch (e: any) {
+            reject(new Error(`Iconfont 响应数据解析失败: ${e.message}`));
+          }
+        });
+      },
+    );
+    req.setTimeout(20000, () => {
+      req.destroy();
+      reject(new Error('请求 Iconfont 超时'));
     });
     req.on('error', reject);
   });
@@ -400,16 +474,26 @@ function getSettingsFilePath(): string {
   return path.join(dir, 'settings.json');
 }
 
+export interface SubCategoryRule {
+  key: string;
+  label: string;
+  matchType?: 'all' | 'regex' | 'endsWith' | 'notEndsWith';
+  pattern?: string;
+}
+
 export interface IconPaginationSettings {
   enablePagination: boolean;
   threshold: number;
   pageSize: number;
+  marketPreviewCount?: number;
+  subCategories?: Record<string, SubCategoryRule[]>;
 }
 
 const DEFAULT_PAGINATION_SETTINGS: IconPaginationSettings = {
   enablePagination: true,
   threshold: 500,
   pageSize: 200,
+  marketPreviewCount: 5,
 };
 
 export function readPaginationSettings(): IconPaginationSettings {
@@ -421,6 +505,8 @@ export function readPaginationSettings(): IconPaginationSettings {
         enablePagination: data.enablePagination !== false,
         threshold: typeof data.threshold === 'number' ? data.threshold : 500,
         pageSize: typeof data.pageSize === 'number' ? data.pageSize : 200,
+        marketPreviewCount: typeof data.marketPreviewCount === 'number' ? data.marketPreviewCount : 5,
+        subCategories: data.subCategories && typeof data.subCategories === 'object' ? data.subCategories : undefined,
       };
     }
   } catch (e) {
@@ -435,6 +521,11 @@ export function writePaginationSettings(settings: Partial<IconPaginationSettings
     enablePagination: settings.enablePagination !== undefined ? Boolean(settings.enablePagination) : current.enablePagination,
     threshold: typeof settings.threshold === 'number' ? Math.max(0, settings.threshold) : current.threshold,
     pageSize: typeof settings.pageSize === 'number' ? Math.max(10, settings.pageSize) : current.pageSize,
+    marketPreviewCount:
+      typeof settings.marketPreviewCount === 'number'
+        ? Math.min(30, Math.max(1, settings.marketPreviewCount))
+        : (current.marketPreviewCount || 5),
+    subCategories: settings.subCategories !== undefined ? settings.subCategories : current.subCategories,
   };
   try {
     const filePath = getSettingsFilePath();
@@ -472,10 +563,11 @@ export const createCustomIconReposResource = (app: any, resourceName = 'customIc
       const officialList = await Promise.all(
         officialRepos.map(async (def) => {
           const dbItem = dbMap.get(def.key);
+          const currentCategory = dbItem?.category || def.category;
           const actualCount = await iconsRepo.count({
             filter: {
               $or: [
-                { category: def.category },
+                { category: currentCategory },
                 { source: def.sourceType === 'iconify' ? `iconify:${def.prefix || def.key}` : `repo:${def.key}` },
               ],
             },
@@ -486,6 +578,10 @@ export const createCustomIconReposResource = (app: any, resourceName = 'customIc
 
           return {
             ...def,
+            title: dbItem?.title || def.title,
+            category: currentCategory,
+            description: dbItem?.description || def.description,
+            homepage: dbItem?.homepage || def.homepage,
             iconCount: repoIconCount,
             status: isInstalled ? 'installed' : (dbItem?.status || 'not_installed'),
             installedCount: actualCount,
@@ -494,32 +590,62 @@ export const createCustomIconReposResource = (app: any, resourceName = 'customIc
         }),
       );
 
-      // 2. 追加用户通过 Prefix 自定义安装的外部 Iconify 集合
+      const paginationSettings = readPaginationSettings();
+      const previewLimit = paginationSettings.marketPreviewCount || 5;
+
+      // 2. 追加用户通过 Prefix 自定义安装的外部 Iconify 或 Iconfont 集合
       const customInstalledList: any[] = [];
       const officialKeys = new Set(officialRepos.map((r) => r.key));
       for (const r of dbRepos) {
         if (!officialKeys.has(r.key)) {
+          const isIconfont = r.sourceType === 'iconfont' || r.key.startsWith('iconfont-');
+          const iconfontCid = isIconfont ? r.key.replace(/^iconfont-/, '') : null;
           const actualCount = await iconsRepo.count({
             filter: {
-              $or: [{ category: r.category }, { source: `iconify:${r.key}` }],
+              $or: [
+                { category: r.category },
+                { source: isIconfont ? `iconfont:${iconfontCid}` : `iconify:${r.key}` },
+              ],
             },
           });
           if (actualCount > 0) {
+            let previewNames: string[] = [];
+            try {
+              const sampleIcons = await iconsRepo.find({
+                filter: {
+                  $or: [
+                    { category: r.category },
+                    { source: isIconfont ? `iconfont:${iconfontCid}` : `iconify:${r.key}` },
+                  ],
+                },
+                limit: previewLimit,
+              });
+              previewNames = sampleIcons.map((i: any) => i.name);
+            } catch (e) {}
+
             customInstalledList.push({
               key: r.key,
               title: r.title || r.key,
               category: r.category || r.key,
               version: r.version || 'latest',
-              homepage: r.homepage || `https://icon-sets.iconify.design/${r.key}/`,
-              description: r.description || `从 Iconify 平台自定义导入的 [${r.key}] 矢量图标集。`,
-              sourceType: 'iconify',
+              homepage:
+                r.homepage ||
+                (isIconfont
+                  ? `https://www.iconfont.cn/collections/detail?cid=${iconfontCid}`
+                  : `https://icon-sets.iconify.design/${r.key}/`),
+              description:
+                r.description ||
+                (isIconfont
+                  ? `从 Iconfont 平台导入的 [${r.title || r.key}] 矢量合辑。`
+                  : `从 Iconify 平台自定义导入的 [${r.key}] 矢量图标集。`),
+              sourceType: isIconfont ? 'iconfont' : 'iconify',
               prefix: r.key,
               iconCount: r.iconCount || actualCount,
-              tags: ['自定义导入', 'Iconify'],
+              tags: isIconfont ? ['自定义导入', 'Iconfont'] : ['自定义导入', 'Iconify'],
               status: 'installed',
               installedCount: actualCount,
               installedAt: r.installedAt || null,
-              previewIcons: [],
+              previewIcons: previewNames,
             });
           }
         }
@@ -640,21 +766,29 @@ export const createCustomIconReposResource = (app: any, resourceName = 'customIc
       const repoKey = ctx.action.params?.key || ctx.request.body?.key || 'caomei';
       let def = getOfficialRepos().find((r) => r.key === repoKey);
 
+      const customTitle = ctx.request.body?.title || ctx.action.params?.title;
+      const customCategory = ctx.request.body?.category || ctx.action.params?.category;
+      const customDescription = ctx.request.body?.description || ctx.action.params?.description;
+
       // 如果不是预置的官方集，视为 Iconify Prefix
       if (!def) {
         def = {
           key: repoKey,
-          title: ctx.request.body?.title || repoKey,
-          category: ctx.request.body?.category || repoKey,
+          title: customTitle || repoKey,
+          category: customCategory || repoKey,
           version: 'latest',
           homepage: `https://icon-sets.iconify.design/${repoKey}/`,
-          description: `从 Iconify 导入的 [${repoKey}] 矢量图标集`,
+          description: customDescription || `从 Iconify 导入的 [${repoKey}] 矢量图标集`,
           sourceType: 'iconify',
           prefix: repoKey,
           iconCount: 0,
           previewIcons: [],
         };
       }
+
+      const finalTitle = (customTitle && String(customTitle).trim()) || def.title;
+      const finalCategory = (customCategory && String(customCategory).trim()) || def.category;
+      const finalDescription = customDescription !== undefined ? String(customDescription).trim() : def.description;
 
       const storageDir = getStorageRepoDir(repoKey);
       let iconItems: any[] = [];
@@ -702,11 +836,12 @@ export const createCustomIconReposResource = (app: any, resourceName = 'customIc
           ctx.throw(500, '未能从草莓图标库压缩包中获取并解析有效的 selection.json 数据');
         }
 
-        iconItems = parseSelectionJsonToIcons(selectionData, def.category);
+        iconItems = parseSelectionJsonToIcons(selectionData, finalCategory);
       } else if (def.sourceType === 'iconmonstr' || repoKey === 'iconmonstr') {
         // C. Iconmonstr 官方极简黑白矢量库流程 (在线实时并发爬取精选 60 款)
         try {
           iconItems = await fetchIconmonstrOnlineIcons(1, 5);
+          iconItems = iconItems.map((item) => ({ ...item, category: finalCategory }));
         } catch (err: any) {
           ctx.throw(500, `Iconmonstr 在线实时爬取失败: ${err.message}`);
         }
@@ -727,11 +862,11 @@ export const createCustomIconReposResource = (app: any, resourceName = 'customIc
           fs.writeFileSync(localBackupPath, JSON.stringify(iconifyJson), 'utf8');
         } catch (e) {}
 
-        iconItems = parseIconifyJsonToIcons(iconifyJson, prefix, def.category);
+        iconItems = parseIconifyJsonToIcons(iconifyJson, prefix, finalCategory);
       }
 
       if (iconItems.length === 0) {
-        ctx.throw(500, `未能从 [${def.title}] 中解析出任何有效的矢量图标`);
+        ctx.throw(500, `未能从 [${finalTitle}] 中解析出任何有效的矢量图标`);
       }
 
       // 分批写入数据库 custom_icons
@@ -768,11 +903,11 @@ export const createCustomIconReposResource = (app: any, resourceName = 'customIc
         const existingRepo = await reposModel.findOne({ filter: { key: def.key } });
         const repoValues = {
           key: def.key,
-          title: def.title,
-          category: def.category,
+          title: finalTitle,
+          category: finalCategory,
           version: def.version,
           homepage: def.homepage,
-          description: def.description,
+          description: finalDescription,
           iconCount: iconItems.length,
           status: 'installed',
           installedAt: new Date(),
@@ -789,11 +924,11 @@ export const createCustomIconReposResource = (app: any, resourceName = 'customIc
       ctx.body = {
         success: true,
         key: def.key,
-        title: def.title,
+        title: finalTitle,
         total: iconItems.length,
         created: createdCount,
         updated: updatedCount,
-        category: def.category,
+        category: finalCategory,
       };
       await next();
     },
@@ -816,15 +951,60 @@ export const createCustomIconReposResource = (app: any, resourceName = 'customIc
         if (dbRepo?.category) targetCategory = dbRepo.category;
       }
 
-      const count = await customIconsRepo.destroy({
-        filter: {
-          $or: [
-            { category: targetCategory },
-            { source: `iconify:${repoKey}` },
-            { source: `repo:${repoKey}` },
-          ],
-        },
-      });
+      const isIconfont = repoKey.startsWith('iconfont-');
+      const iconfontCid = isIconfont ? repoKey.replace(/^iconfont-/, '') : null;
+
+      let removedCount = 0;
+      const sources = [`iconify:${repoKey}`, `repo:${repoKey}`];
+      if (iconfontCid) {
+        sources.push(`iconfont:${iconfontCid}`);
+      }
+
+      // 针对 SQLite 等数据库的大批量删除保护：
+      // 避免 NocoBase Repository.destroy 将成千上万个 ID 展开为超大 [Op.or] 触发 SQLite 1000 深度限制
+      try {
+        const sequelize = app.db.sequelize;
+        const tableName = customIconsRepo.model?.tableName || 'custom_icons';
+        const queryInterface = sequelize.getQueryInterface();
+        const quotedTable = queryInterface.quoteIdentifier(tableName);
+        const quotedCat = queryInterface.quoteIdentifier('category');
+        const quotedSource = queryInterface.quoteIdentifier('source');
+
+        const placeholders = sources.map(() => '?').join(',');
+        const sql = `DELETE FROM ${quotedTable} WHERE ${quotedCat} = ? OR ${quotedSource} IN (${placeholders})`;
+        const [results, metadata] = await sequelize.query(sql, {
+          replacements: [targetCategory, ...sources],
+        });
+        removedCount =
+          metadata && typeof metadata.changes === 'number'
+            ? metadata.changes
+            : typeof results === 'number'
+            ? results
+            : 0;
+      } catch (sqlErr: any) {
+        console.warn('[plugin-custom-icons] 原生 SQL 批量删除失败，降级至分片安全删除:', sqlErr?.message);
+        // Fallback：分批分片安全删除（每批 200 个，确保远低于 SQLite 1000 限制）
+        const allRecords = await customIconsRepo.find({
+          filter: {
+            $or: [
+              { category: targetCategory },
+              { source: `iconify:${repoKey}` },
+              { source: `repo:${repoKey}` },
+              ...(iconfontCid ? [{ source: `iconfont:${iconfontCid}` }] : []),
+            ],
+          },
+          fields: ['id'],
+        });
+        const ids = (allRecords || []).map((i: any) => i.id).filter(Boolean);
+        const CHUNK = 200;
+        for (let i = 0; i < ids.length; i += CHUNK) {
+          const chunkIds = ids.slice(i, i + CHUNK);
+          await customIconsRepo.destroy({
+            filterByTk: chunkIds,
+          });
+        }
+        removedCount = ids.length;
+      }
 
       try {
         const existingRepo = await reposModel.findOne({ filter: { key: repoKey } });
@@ -842,7 +1022,161 @@ export const createCustomIconReposResource = (app: any, resourceName = 'customIc
       ctx.body = {
         success: true,
         key: repoKey,
-        removedCount: count,
+        removedCount,
+      };
+      await next();
+    },
+
+    /**
+     * 探测 Iconfont 公开合辑详情及图标列表
+     */
+    async probeIconfont(ctx: any, next: any) {
+      const rawInput = ctx.action.params?.input || ctx.request.body?.input || ctx.query?.input || ctx.query?.url;
+      if (!rawInput) {
+        ctx.throw(400, '请输入 Iconfont 合辑链接或合辑 ID（例如 https://www.iconfont.cn/collections/detail?cid=54546 或 54546）');
+      }
+      const cid = extractIconfontCid(String(rawInput));
+      if (!cid) {
+        ctx.throw(400, '无法从输入中解析出有效的 Iconfont 合辑 ID (cid)');
+      }
+
+      try {
+        const data = await fetchIconfontCollection(cid);
+        const collection = data.collection || {};
+        const icons: any[] = data.icons || [];
+
+        const samples = icons.slice(0, 12).map((icon: any) => ({
+          id: icon.id,
+          name: icon.name,
+          show_svg: icon.show_svg,
+        }));
+
+        ctx.body = {
+          success: true,
+          cid,
+          title: collection.name || `Iconfont合辑_${cid}`,
+          description: collection.description || `来自 Iconfont 的矢量图标合辑（ID: ${cid}）`,
+          total: icons.length,
+          creator: collection.creator?.nickname || 'Iconfont 平台',
+          category: collection.name || `iconfont_${cid}`,
+          samples,
+          homepage: `https://www.iconfont.cn/collections/detail?cid=${cid}`,
+          sourcePlatform: 'iconfont',
+        };
+      } catch (err: any) {
+        ctx.throw(500, `探测 Iconfont 合辑失败: ${err.message}`);
+      }
+      await next();
+    },
+
+    /**
+     * 从 Iconfont 公开合辑一键导入全部图标
+     */
+    async importIconfont(ctx: any, next: any) {
+      const rawInput = ctx.action.params?.input || ctx.request.body?.input || ctx.query?.input || ctx.query?.url;
+      if (!rawInput) {
+        ctx.throw(400, '请输入 Iconfont 合辑链接或合辑 ID');
+      }
+      const cid = extractIconfontCid(String(rawInput));
+      if (!cid) {
+        ctx.throw(400, '无法从输入中解析出有效的 Iconfont 合辑 ID (cid)');
+      }
+
+      let data: any;
+      try {
+        data = await fetchIconfontCollection(cid);
+      } catch (err: any) {
+        ctx.throw(500, `获取 Iconfont 合辑数据失败: ${err.message}`);
+      }
+
+      const collection = data.collection || {};
+      const icons: any[] = data.icons || [];
+      if (icons.length === 0) {
+        ctx.throw(400, '该 Iconfont 合辑中未找到任何矢量图标');
+      }
+
+      const customCategory = ctx.request.body?.category || ctx.action.params?.category;
+      const customTitle = ctx.request.body?.title || ctx.action.params?.title;
+      const customDescription = ctx.request.body?.description || ctx.action.params?.description;
+      const finalCategory = (customCategory && String(customCategory).trim()) || collection.name || `iconfont_${cid}`;
+      const finalTitle = (customTitle && String(customTitle).trim()) || collection.name || `Iconfont合辑_${cid}`;
+      const finalDescription =
+        customDescription !== undefined
+          ? String(customDescription).trim()
+          : collection.description || `从 Iconfont 平台导入的 [${finalTitle}] 矢量合辑`;
+
+      const customIconsRepo = app.db.getRepository('custom_icons');
+      let createdCount = 0;
+      let updatedCount = 0;
+
+      for (const icon of icons) {
+        const svgContent = icon.show_svg || icon.svg || '';
+        if (!svgContent) continue;
+
+        const iconName = `iconfont:${cid}_${icon.id}`;
+        const iconTitle = icon.name || `icon_${icon.id}`;
+
+        const existing = await customIconsRepo.findOne({ filter: { name: iconName } });
+        if (existing) {
+          await customIconsRepo.update({
+            filterByTk: existing.id,
+            values: {
+              title: iconTitle,
+              category: finalCategory,
+              svg: svgContent,
+              source: `iconfont:${cid}`,
+            },
+          });
+          updatedCount++;
+        } else {
+          await customIconsRepo.create({
+            values: {
+              name: iconName,
+              title: iconTitle,
+              category: finalCategory,
+              svg: svgContent,
+              source: `iconfont:${cid}`,
+            },
+          });
+          createdCount++;
+        }
+      }
+
+      // 登记并更新 custom_icon_repos 记录
+      const repoKey = `iconfont-${cid}`;
+      const reposModel = app.db.getRepository('custom_icon_repos');
+      try {
+        const existingRepo = await reposModel.findOne({ filter: { key: repoKey } });
+        const repoValues = {
+          key: repoKey,
+          title: finalTitle,
+          category: finalCategory,
+          version: 'latest',
+          homepage: `https://www.iconfont.cn/collections/detail?cid=${cid}`,
+          description: finalDescription,
+          iconCount: icons.length,
+          sourceType: 'iconfont',
+          status: 'installed',
+          installedAt: new Date(),
+        };
+        if (existingRepo) {
+          await reposModel.update({ filterByTk: existingRepo.id, values: repoValues });
+        } else {
+          await reposModel.create({ values: repoValues });
+        }
+      } catch (e: any) {
+        console.warn('[plugin-custom-icons] 更新 custom_icon_repos 失败:', e);
+      }
+
+      ctx.body = {
+        success: true,
+        key: repoKey,
+        cid,
+        title: finalTitle,
+        category: finalCategory,
+        total: icons.length,
+        created: createdCount,
+        updated: updatedCount,
       };
       await next();
     },
@@ -973,6 +1307,97 @@ export const createCustomIconReposResource = (app: any, resourceName = 'customIc
       const values = ctx.action.params?.values || ctx.request.body || {};
       const updated = writePaginationSettings(values);
       ctx.body = updated;
+      await next();
+    },
+
+    /**
+     * 修改仓库配置（标题、分类、描述、主页等），并级联更新该仓库下所有图标的所属分类
+     */
+    async updateRepo(ctx: any, next: any) {
+      const params = ctx.action.params || {};
+      const body = ctx.request.body || {};
+      const key = params.key || body.key;
+      if (!key) {
+        ctx.throw(400, '缺少仓库唯一标识 key');
+      }
+
+      const reposModel = app.db.getRepository('custom_icon_repos');
+      const customIconsRepo = app.db.getRepository('custom_icons');
+
+      // 查找当前仓库在数据库中的记录
+      let repo = await reposModel.findOne({ filter: { key } });
+      const officialDef = getOfficialRepos().find((r) => r.key === key);
+
+      const oldCategory = repo?.category || officialDef?.category || key;
+      const newTitle = body.title !== undefined ? String(body.title).trim() : (repo?.title || officialDef?.title || key);
+      const newCategory = body.category !== undefined ? String(body.category).trim() : oldCategory;
+      const newDescription = body.description !== undefined ? String(body.description).trim() : (repo?.description || officialDef?.description || '');
+      const newHomepage = body.homepage !== undefined ? String(body.homepage).trim() : (repo?.homepage || officialDef?.homepage || '');
+
+      if (!newTitle) {
+        ctx.throw(400, '仓库标题不能为空');
+      }
+      if (!newCategory) {
+        ctx.throw(400, '所属分类名称不能为空');
+      }
+
+      const repoValues: any = {
+        key,
+        title: newTitle,
+        category: newCategory,
+        description: newDescription,
+        homepage: newHomepage,
+      };
+
+      if (repo) {
+        await reposModel.update({
+          filterByTk: repo.id,
+          values: repoValues,
+        });
+      } else {
+        // 如果数据库中尚无记录（例如预置官方库从未落库过 repo 详情）
+        repoValues.version = officialDef?.version || 'latest';
+        repoValues.status = 'installed';
+        repoValues.iconCount = officialDef?.iconCount || 0;
+        repoValues.installedAt = new Date();
+        repo = await reposModel.create({ values: repoValues });
+      }
+
+      let affectedIconsCount = 0;
+      // 若分类名称发生变更，级联自动更新关联的所有图标的 category
+      if (oldCategory !== newCategory) {
+        const isIconfont = key.startsWith('iconfont-');
+        const iconfontCid = isIconfont ? key.replace(/^iconfont-/, '') : null;
+
+        const iconFilter: any = {
+          $or: [
+            { category: oldCategory },
+            { source: `repo:${key}` },
+            ...(isIconfont ? [{ source: `iconfont:${iconfontCid}` }] : [{ source: `iconify:${key}` }]),
+          ],
+        };
+
+        const updateResult = await customIconsRepo.update({
+          filter: iconFilter,
+          values: {
+            category: newCategory,
+          },
+        });
+        affectedIconsCount = Array.isArray(updateResult) ? updateResult[0] : (typeof updateResult === 'number' ? updateResult : 0);
+      }
+
+      ctx.body = {
+        success: true,
+        key,
+        title: newTitle,
+        oldCategory,
+        newCategory,
+        affectedIconsCount,
+        repo: {
+          ...repoValues,
+          id: repo?.id,
+        },
+      };
       await next();
     },
   },

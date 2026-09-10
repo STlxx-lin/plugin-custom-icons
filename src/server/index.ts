@@ -53,14 +53,14 @@ export class PluginCustomIconsServer extends Plugin {
     this.app.acl.allow('custom_icons', ['list', 'getCategories'], 'public');
     this.app.acl.allow('customIcons', ['list', 'getCategories'], 'loggedIn');
     this.app.acl.allow('custom_icons', ['list', 'getCategories'], 'loggedIn');
-    this.app.acl.allow('customIconRepos', ['list', 'probe', 'getSettings'], 'public');
-    this.app.acl.allow('custom_icon_repos', ['list', 'probe', 'getSettings'], 'public');
+    this.app.acl.allow('customIconRepos', ['list', 'probe', 'probeIconfont', 'getSettings'], 'public');
+    this.app.acl.allow('custom_icon_repos', ['list', 'probe', 'probeIconfont', 'getSettings'], 'public');
 
-    // 5. 管理权限接口（创建、更新、批量导入、删除、仓库安装与卸载、Iconify探测、分页面爬取、全局配置保存）
+    // 5. 管理权限接口（创建、更新、批量导入、删除、仓库安装与卸载、修改配置、Iconify/Iconfont探测与导入、分页面爬取、全局配置保存）
     this.app.acl.allow('custom_icons', ['create', 'update', 'batchCreate', 'destroy'], 'loggedIn');
     this.app.acl.allow('customIcons', ['create', 'update', 'batchCreate', 'destroy'], 'loggedIn');
-    this.app.acl.allow('customIconRepos', ['list', 'probe', 'install', 'uninstall', 'crawlPage', 'getSettings', 'saveSettings'], 'loggedIn');
-    this.app.acl.allow('custom_icon_repos', ['list', 'probe', 'install', 'uninstall', 'crawlPage', 'getSettings', 'saveSettings'], 'loggedIn');
+    this.app.acl.allow('customIconRepos', ['list', 'probe', 'probeIconfont', 'importIconfont', 'install', 'uninstall', 'crawlPage', 'getSettings', 'saveSettings', 'updateRepo'], 'loggedIn');
+    this.app.acl.allow('custom_icon_repos', ['list', 'probe', 'probeIconfont', 'importIconfont', 'install', 'uninstall', 'crawlPage', 'getSettings', 'saveSettings', 'updateRepo'], 'loggedIn');
   }
 }
 

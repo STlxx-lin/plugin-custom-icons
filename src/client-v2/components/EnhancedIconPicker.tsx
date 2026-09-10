@@ -29,7 +29,13 @@ import {
 import { debounce, groupBy } from 'lodash';
 import { useTranslation } from 'react-i18next';
 import { hasIcon, Icon, icons } from '@nocobase/client-v2';
-import { customIconsManager, CustomIconItem } from '../services/custom-icons-manager';
+import {
+  customIconsManager,
+  CustomIconItem,
+  SubCategoryDef,
+  RawSubCategoryConfig,
+  parseSubCategoryRules,
+} from '../services/custom-icons-manager';
 import { CustomIconModal } from './CustomIconModal';
 import {
   parseIconValue,
@@ -37,7 +43,6 @@ import {
   PRESET_ICON_COLORS,
   PRESET_ICON_SIZES,
 } from '../utils/icon-style-helper';
-import subCategoriesData from '../config/sub-categories.json';
 
 const { Search } = Input;
 
@@ -118,51 +123,12 @@ export const RenderPreviewIcon: React.FC<{
   );
 };
 
-export interface SubCategoryDef {
-  key: string;
-  label: string;
-  filter: (name: string, item?: any) => boolean;
-}
+export type { SubCategoryDef, RawSubCategoryConfig };
+export const parseSubCategories = parseSubCategoryRules;
 
-export interface RawSubCategoryConfig {
-  key: string;
-  label: string;
-  matchType?: 'regex' | 'endsWith' | 'notEndsWith' | 'all';
-  pattern?: string;
-}
-
-export function parseSubCategories(rawList: RawSubCategoryConfig[] = []): SubCategoryDef[] {
-  return (rawList || []).map((item) => {
-    if (!item.matchType || item.matchType === 'all' || !item.pattern) {
-      return { key: item.key, label: item.label, filter: () => true };
-    }
-    if (item.matchType === 'endsWith') {
-      const p = item.pattern;
-      return { key: item.key, label: item.label, filter: (n: string) => n.endsWith(p) };
-    }
-    if (item.matchType === 'notEndsWith') {
-      const p = item.pattern;
-      return { key: item.key, label: item.label, filter: (n: string) => !n.endsWith(p) };
-    }
-    if (item.matchType === 'regex') {
-      const reg = new RegExp(item.pattern, 'i');
-      return { key: item.key, label: item.label, filter: (n: string) => reg.test(n) };
-    }
-    return { key: item.key, label: item.label, filter: () => true };
-  });
-}
-
-export const CAOMEI_SUB_CATEGORIES: SubCategoryDef[] = parseSubCategories(
-  (subCategoriesData as any)?.caomei,
-);
-
-export const BUILTIN_SUB_CATEGORIES: SubCategoryDef[] = parseSubCategories(
-  (subCategoriesData as any)?.builtin,
-);
-
-export const UNIVERSAL_ICONIFY_SUB_CATEGORIES: SubCategoryDef[] = parseSubCategories(
-  (subCategoriesData as any)?.universal,
-);
+export const CAOMEI_SUB_CATEGORIES: SubCategoryDef[] = customIconsManager.getSubCategories('caomei');
+export const BUILTIN_SUB_CATEGORIES: SubCategoryDef[] = customIconsManager.getSubCategories('builtin');
+export const UNIVERSAL_ICONIFY_SUB_CATEGORIES: SubCategoryDef[] = customIconsManager.getSubCategories('universal');
 
 function EnhancedIconField(props: IconPickerProps) {
   const { fontSizeXL } = theme.useToken().token;
@@ -184,7 +150,7 @@ function EnhancedIconField(props: IconPickerProps) {
   const [activeTab, setActiveTab] = useState('Outlined');
   const [activeSubCat, setActiveSubCat] = useState('all');
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // 动态读取全局分页配置（支持设置中心动态调整即时生效）
@@ -318,34 +284,31 @@ function EnhancedIconField(props: IconPickerProps) {
     return groups;
   }, [customCategories, t]);
 
-  // 计算当前分类对应的子分类项列表（带数量统计）
+  // 计算当前分类对应的子分类项列表（带数量统计，动态支持设置中心配置）
   const currentSubCategories = useMemo(() => {
-    // 1. 草莓图标库专用子分类
-    if (activeTab === 'custom:caomei') {
-      const iconsInCat = allCustomIcons.filter((i) => (i.category || 'custom') === 'caomei');
-      return CAOMEI_SUB_CATEGORIES.map((sub) => {
-        const count = iconsInCat.filter((item) => sub.filter(item.name, item)).length;
-        return { ...sub, count };
-      }).filter((s) => s.key === 'all' || s.count > 0);
-    }
-
-    // 2. 所有其他外部与自定义图标库（如 Lucide、Remix、Tabler、Solar 等）
+    // 1. 所有扩展与外部图库（如 草莓、Lucide、Remix、Tabler、Solar 等）
     if (activeTab.startsWith('custom:')) {
       const targetCat = activeTab.replace('custom:', '');
+      const subDefs = customIconsManager.getSubCategories(targetCat);
       const iconsInCat = allCustomIcons.filter((i) => (i.category || 'custom') === targetCat);
-      return UNIVERSAL_ICONIFY_SUB_CATEGORIES.map((sub) => {
-        const count = iconsInCat.filter((item) => sub.filter(item.name, item)).length;
-        return { ...sub, count };
-      }).filter((s) => s.key === 'all' || s.count > 0);
+      return subDefs
+        .map((sub) => {
+          const count = iconsInCat.filter((item) => sub.filter(item.name, item)).length;
+          return { ...sub, count };
+        })
+        .filter((s) => s.key === 'all' || s.count > 0);
     }
 
-    // 3. 系统官方内置图标（线框 / 实底 / 双色）
+    // 2. 系统官方内置图标（线框 / 实底 / 双色）
+    const subDefs = customIconsManager.getSubCategories(activeTab);
     const list = groupIconData[activeTab] || [];
-    return BUILTIN_SUB_CATEGORIES.map((sub) => {
-      const count = list.filter((key) => sub.filter(key)).length;
-      return { ...sub, count };
-    }).filter((s) => s.key === 'all' || s.count > 0);
-  }, [activeTab, allCustomIcons, groupIconData]);
+    return subDefs
+      .map((sub) => {
+        const count = list.filter((key) => sub.filter(key)).length;
+        return { ...sub, count };
+      })
+      .filter((s) => s.key === 'all' || s.count > 0);
+  }, [activeTab, allCustomIcons, groupIconData, tick]);
 
   // 选中图标并保留当前已配置的颜色与尺寸
   const handleSelectIcon = (key: string) => {
@@ -726,8 +689,18 @@ function EnhancedIconField(props: IconPickerProps) {
                     value={activeTab}
                     onChange={(val) => setActiveTab(val)}
                     options={categorySelectOptions}
-                    style={{ width: 175, height: 32 }}
+                    style={{ width: 190, height: 32 }}
                     popupMatchSelectWidth={false}
+                    showSearch
+                    placeholder="搜索或选择分类"
+                    optionFilterProp="label"
+                    filterOption={(input, option) => {
+                      if (!input) return true;
+                      const lower = input.trim().toLowerCase();
+                      const labelStr = String(option?.label || '');
+                      const valueStr = String(option?.value || '');
+                      return labelStr.toLowerCase().includes(lower) || valueStr.toLowerCase().includes(lower);
+                    }}
                   />
                 )}
                 <Tooltip title="自定义输入 SVG 或批量导入图标库">

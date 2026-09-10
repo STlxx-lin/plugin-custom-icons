@@ -36,6 +36,8 @@ import {
   PlayCircleOutlined,
   PauseCircleOutlined,
   ForwardOutlined,
+  EditOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import { customIconsManager } from '../services/custom-icons-manager';
 import { sanitizeAndFormatSvg } from '../utils/svg-helper';
@@ -86,7 +88,7 @@ export interface IconRepoItem {
   homepage: string;
   description: string;
   downloadUrl?: string;
-  sourceType: 'zip' | 'iconify' | 'iconmonstr';
+  sourceType: 'zip' | 'iconify' | 'iconmonstr' | 'iconfont';
   prefix?: string;
   iconCount: number;
   tags?: string[];
@@ -106,6 +108,7 @@ interface ProbeResult {
   samples: string[];
   homepage: string;
   sourcePlatform?: string;
+  rawIconfontData?: any;
 }
 
 interface IconRepoMarketProps {
@@ -126,6 +129,28 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
   const [customInput, setCustomInput] = useState<string>('');
   const [probing, setProbing] = useState<boolean>(false);
   const [probeResult, setProbeResult] = useState<ProbeResult | null>(null);
+  const [probeCustomTitle, setProbeCustomTitle] = useState<string>('');
+  const [probeCustomCategory, setProbeCustomCategory] = useState<string>('');
+  const [probeCustomDescription, setProbeCustomDescription] = useState<string>('');
+
+  // Iconfont 平台合辑导入状态
+  const [iconfontModalVisible, setIconfontModalVisible] = useState<boolean>(false);
+  const [iconfontInput, setIconfontInput] = useState<string>('');
+  const [iconfontProbing, setIconfontProbing] = useState<boolean>(false);
+  const [iconfontProbeData, setIconfontProbeData] = useState<any>(null);
+  const [iconfontCustomTitle, setIconfontCustomTitle] = useState<string>('');
+  const [iconfontCustomCategory, setIconfontCustomCategory] = useState<string>('');
+  const [iconfontCustomDescription, setIconfontCustomDescription] = useState<string>('');
+  const [iconfontImporting, setIconfontImporting] = useState<boolean>(false);
+
+  // 仓库配置修改状态（针对所有已安装的仓库）
+  const [editModalVisible, setEditModalVisible] = useState<boolean>(false);
+  const [editingRepo, setEditingRepo] = useState<IconRepoItem | null>(null);
+  const [editTitle, setEditTitle] = useState<string>('');
+  const [editCategory, setEditCategory] = useState<string>('');
+  const [editDescription, setEditDescription] = useState<string>('');
+  const [editHomepage, setEditHomepage] = useState<string>('');
+  const [savingEdit, setSavingEdit] = useState<boolean>(false);
 
   // Iconmonstr 分页面全量实时拉取控制状态
   const [crawlModalVisible, setCrawlModalVisible] = useState<boolean>(false);
@@ -137,17 +162,28 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
   const [crawlLogText, setCrawlLogText] = useState<string>('');
   const stopCrawlRef = React.useRef<boolean>(false);
 
+  // 本地已加载的全部图标池（用于直接显示已安装合辑的前 5 个真实图标）
+  const [localIcons, setLocalIcons] = useState<any[]>(customIconsManager.getAllIcons());
+
   const fetchRepos = async () => {
     if (!apiClient) return;
     setLoading(true);
     try {
-      let res: any = null;
-      try {
-        res = await apiClient.request({ url: 'customIconRepos:list' });
-      } catch (e) {
-        res = await apiClient.request({ url: 'custom_icon_repos:list' });
-      }
+      const [, res] = await Promise.all([
+        customIconsManager
+          .loadIcons(apiClient)
+          .then(() => setLocalIcons(customIconsManager.getAllIcons()))
+          .catch(() => {}),
+        (async () => {
+          try {
+            return await apiClient.request({ url: 'customIconRepos:list' });
+          } catch (e) {
+            return await apiClient.request({ url: 'custom_icon_repos:list' });
+          }
+        })(),
+      ]);
       setRepos(res?.data?.data || res?.data || []);
+      setLocalIcons(customIconsManager.getAllIcons());
     } catch (err: any) {
       console.error('Failed to fetch icon repos:', err);
     } finally {
@@ -157,32 +193,87 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
 
   useEffect(() => {
     fetchRepos();
+    const unsub = customIconsManager.subscribe(() => {
+      setLocalIcons(customIconsManager.getAllIcons());
+    });
+    return unsub;
   }, []);
 
-  // 执行 Iconify 官方平台探测
+  // 执行官方平台探测（支持 Iconify、Iconmonstr、Streamline 及 Iconfont 平台）
   const handleProbe = async () => {
-    if (!customInput.trim()) {
-      message.warning('请输入 Iconify 图标集前缀或链接，例如：solar 或 https://icon-sets.iconify.design/solar/');
+    const raw = customInput.trim();
+    if (!raw) {
+      message.warning('请输入图标集前缀或链接，例如：solar、iconmonstr 或 https://www.iconfont.cn/collections/detail?cid=54546');
       return;
     }
+
+    // 1. 优先智能识别 Iconfont 链接或含有合辑 ID
+    if (/iconfont\.cn/i.test(raw) || /(?:cid|id)=\d+/i.test(raw)) {
+      setProbing(true);
+      try {
+        let res: any = null;
+        try {
+          res = await apiClient.request({
+            url: 'customIconRepos:probeIconfont',
+            params: { input: raw },
+          });
+        } catch (e1) {
+          res = await apiClient.request({
+            url: 'custom_icon_repos:probeIconfont',
+            params: { input: raw },
+          });
+        }
+        const data = res?.data?.data || res?.data;
+        if (data && (data.title || data.cid)) {
+          setProbeResult({
+            prefix: `iconfont-${data.cid}`,
+            title: data.title,
+            total: data.total,
+            author: data.creator || 'Iconfont 平台',
+            license: 'Iconfont 官方素材 (商业/个人使用请遵循原作者规范)',
+            category: data.category || data.title,
+            samples: (data.samples || []).map((s: any) => s.name || s.id),
+            homepage: data.homepage,
+            sourcePlatform: 'iconfont',
+            rawIconfontData: data,
+          });
+          setProbeCustomTitle(data.title || `Iconfont合辑_${data.cid}`);
+          setProbeCustomCategory(data.category || data.title);
+          setProbeCustomDescription(data.description || '');
+          message.success(`成功探测到 Iconfont [${data.title}] 合辑，共 ${data.total} 款矢量图标！`);
+        } else {
+          message.error('未检索到 Iconfont 合辑信息，请确认链接或合辑 ID 是否有效');
+        }
+      } catch (err: any) {
+        message.error(err?.response?.data?.message || err?.message || '探测 Iconfont 合辑失败');
+      } finally {
+        setProbing(false);
+      }
+      return;
+    }
+
+    // 2. 原有 Streamline / Iconmonstr / Iconify 探测
     setProbing(true);
     try {
       let res: any = null;
       try {
         res = await apiClient.request({
           url: 'customIconRepos:probe',
-          params: { prefix: customInput.trim() },
+          params: { prefix: raw },
         });
       } catch (e1) {
         res = await apiClient.request({
           url: 'custom_icon_repos:probe',
-          params: { prefix: customInput.trim() },
+          params: { prefix: raw },
         });
       }
 
       const data: ProbeResult = res?.data?.data || res?.data;
       if (data && data.title) {
         setProbeResult(data);
+        setProbeCustomTitle(data.title);
+        setProbeCustomCategory(data.category || data.title);
+        setProbeCustomDescription('');
         message.success(`成功探测到 [${data.title}] 图标集，共 ${data.total} 款矢量图标！`);
       } else {
         message.error('未检索到有效的集合信息，请确认前缀名称是否正确');
@@ -194,25 +285,160 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
     }
   };
 
+  // Iconfont 专属弹窗探测操作
+  const handleProbeIconfontModal = async () => {
+    if (!iconfontInput.trim()) {
+      message.warning('请输入 Iconfont 合辑链接或合辑 ID（例如 54546）');
+      return;
+    }
+    setIconfontProbing(true);
+    try {
+      let res: any = null;
+      try {
+        res = await apiClient.request({
+          url: 'customIconRepos:probeIconfont',
+          params: { input: iconfontInput.trim() },
+        });
+      } catch (e1) {
+        res = await apiClient.request({
+          url: 'custom_icon_repos:probeIconfont',
+          params: { input: iconfontInput.trim() },
+        });
+      }
+      const data = res?.data?.data || res?.data;
+      if (data && (data.title || data.cid)) {
+        setIconfontProbeData(data);
+        setIconfontCustomTitle(data.title || `Iconfont合辑_${data.cid}`);
+        setIconfontCustomCategory(data.title || `iconfont_${data.cid}`);
+        setIconfontCustomDescription(data.description || '');
+        message.success(`成功探测到 [${data.title}] 合辑，共 ${data.total} 款矢量图标！`);
+      } else {
+        message.error('未找到该合辑，请确认链接或 ID 是否有效');
+      }
+    } catch (err: any) {
+      message.error(err?.response?.data?.message || err?.message || '探测合辑失败');
+    } finally {
+      setIconfontProbing(false);
+    }
+  };
+
+  // Iconfont 专属弹窗确认导入操作
+  const handleImportIconfontModal = async () => {
+    if (!iconfontProbeData) return;
+    setIconfontImporting(true);
+    const finalTitle = iconfontCustomTitle.trim() || iconfontProbeData.title;
+    const finalCategory = iconfontCustomCategory.trim() || iconfontProbeData.title;
+    const finalDescription = iconfontCustomDescription.trim() || iconfontProbeData.description;
+
+    const hide = message.loading(`正在拉取并入库 [${finalTitle}] 的全部矢量图标...`, 0);
+    try {
+      let res: any = null;
+      const payload = {
+        input: iconfontProbeData.cid,
+        title: finalTitle,
+        category: finalCategory,
+        description: finalDescription,
+      };
+      try {
+        res = await apiClient.request({
+          url: 'customIconRepos:importIconfont',
+          method: 'post',
+          data: payload,
+        });
+      } catch (e1) {
+        res = await apiClient.request({
+          url: 'custom_icon_repos:importIconfont',
+          method: 'post',
+          data: payload,
+        });
+      }
+      const result = res?.data?.data || res?.data || {};
+      message.success(
+        `导入成功！已将 [${finalTitle}] 的 ${result.total || iconfontProbeData.total} 款图标添加到分类 [${result.category || finalCategory}]！`,
+      );
+      await customIconsManager.loadIcons(apiClient);
+      await fetchRepos();
+      if (onRepoChanged) onRepoChanged();
+      setIconfontModalVisible(false);
+      setIconfontProbeData(null);
+      setIconfontInput('');
+    } catch (err: any) {
+      message.error(err?.response?.data?.message || err?.message || '导入 Iconfont 合辑失败');
+    } finally {
+      hide();
+      setIconfontImporting(false);
+    }
+  };
+
   // 安装指定的仓库（预置或探测到的自定义库）
   const handleInstall = async (
     repoKey: string,
     title: string,
     categoryName?: string,
     iconCount?: number,
+    description?: string,
   ) => {
     if (repoKey === 'iconmonstr') {
       openIconmonstrCrawlModal(0);
       return;
     }
+
+    // A. Iconfont 合辑导入处理
+    if (repoKey.startsWith('iconfont-') || (probeResult && probeResult.sourcePlatform === 'iconfont')) {
+      setOperatingKey(repoKey);
+      const hideMsg = message.loading(`正在从 Iconfont 拉取并导入 [${title}] 的全部矢量图标...`, 0);
+      try {
+        const cid = repoKey.replace(/^iconfont-/, '') || (probeResult as any)?.rawIconfontData?.cid;
+        let res: any = null;
+        const payload = {
+          input: cid,
+          title,
+          category: categoryName || title,
+          description,
+        };
+        try {
+          res = await apiClient.request({
+            url: 'customIconRepos:importIconfont',
+            method: 'post',
+            data: payload,
+          });
+        } catch (e1) {
+          res = await apiClient.request({
+            url: 'custom_icon_repos:importIconfont',
+            method: 'post',
+            data: payload,
+          });
+        }
+        const result = res?.data?.data || res?.data || {};
+        message.success(
+          `恭喜！成功从 Iconfont 导入 [${title}]，共 ${result.total || result.created || 0} 个矢量图标！已归入分类 [${result.category || categoryName || title}]`,
+        );
+        await customIconsManager.loadIcons(apiClient);
+        await fetchRepos();
+        if (onRepoChanged) onRepoChanged();
+        if (probeResult && probeResult.prefix === repoKey) {
+          setProbeResult(null);
+          setCustomInput('');
+        }
+      } catch (err: any) {
+        message.error(err?.response?.data?.message || err?.message || '导入 Iconfont 合辑失败');
+      } finally {
+        hideMsg();
+        setOperatingKey(null);
+      }
+      return;
+    }
+
+    // B. Iconify / 草莓等其它仓库安装处理
     setOperatingKey(repoKey);
-    const hideMsg = message.loading(`正在从 Iconify / CDN 高速下载并解析 [${title}]，请稍候...`, 0);
+    const hideMsg = message.loading(`正在下载并解析 [${title}]，请稍候...`, 0);
     try {
       let res: any = null;
       const payload = {
         key: repoKey,
         title,
         category: categoryName || repoKey,
+        description,
       };
 
       try {
@@ -249,6 +475,77 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
     } finally {
       hideMsg();
       setOperatingKey(null);
+    }
+  };
+
+  // 打开修改仓库配置弹窗
+  const handleOpenEditRepoModal = (repo: IconRepoItem) => {
+    setEditingRepo(repo);
+    setEditTitle(repo.title || repo.key);
+    setEditCategory(repo.category || repo.key);
+    setEditDescription(repo.description || '');
+    setEditHomepage(repo.homepage || '');
+    setEditModalVisible(true);
+  };
+
+  // 保存修改后的仓库配置（自动级联更新关联图标的所属分类）
+  const handleSaveEditRepo = async () => {
+    if (!editingRepo) return;
+    const trimmedTitle = editTitle.trim();
+    const trimmedCategory = editCategory.trim();
+    if (!trimmedTitle) {
+      message.error('仓库标题不能为空');
+      return;
+    }
+    if (!trimmedCategory) {
+      message.error('所属分类名称不能为空');
+      return;
+    }
+
+    setSavingEdit(true);
+    try {
+      const payload = {
+        key: editingRepo.key,
+        title: trimmedTitle,
+        category: trimmedCategory,
+        description: editDescription.trim(),
+        homepage: editHomepage.trim(),
+      };
+
+      let res: any = null;
+      try {
+        res = await apiClient.request({
+          url: 'customIconRepos:updateRepo',
+          method: 'post',
+          data: payload,
+        });
+      } catch (e1) {
+        res = await apiClient.request({
+          url: 'custom_icon_repos:updateRepo',
+          method: 'post',
+          data: payload,
+        });
+      }
+
+      const result = res?.data?.data || res?.data || {};
+      const affected = result.affectedIconsCount || 0;
+      if (affected > 0) {
+        message.success(
+          `修改配置成功！已同步更新仓库信息，并将 ${affected} 款图标分类同步变更至 [${trimmedCategory}]！`,
+        );
+      } else {
+        message.success(`修改配置成功！已更新仓库 [${trimmedTitle}] 的配置。`);
+      }
+
+      await customIconsManager.loadIcons(apiClient);
+      await fetchRepos();
+      if (onRepoChanged) onRepoChanged();
+      setEditModalVisible(false);
+      setEditingRepo(null);
+    } catch (err: any) {
+      message.error(err?.response?.data?.message || err?.message || '保存仓库配置失败');
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -496,6 +793,56 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
       );
     }
 
+    // 3.5 Iconfont 平台合辑图标预览（优先从 probeResult 中获取矢量 SVG）
+    if (sourceType === 'iconfont' || prefix.startsWith('iconfont')) {
+      const matchedSample = probeResult?.rawIconfontData?.samples?.find(
+        (s: any) => s.name === iconName || s.name === cleanName || String(s.id) === String(cleanName),
+      );
+      if (matchedSample?.show_svg) {
+        return (
+          <Tooltip title={matchedSample.name || iconName} key={iconName}>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 36,
+                height: 36,
+                borderRadius: 6,
+                backgroundColor: '#fff',
+                border: isInstalled ? '1px solid #b7eb8f' : '1px solid #ffbb96',
+                fontSize: 20,
+                color: isInstalled ? '#52c41a' : '#ff4400',
+                transition: 'all 0.2s',
+              }}
+              dangerouslySetInnerHTML={{ __html: sanitizeAndFormatSvg(matchedSample.show_svg) }}
+            />
+          </Tooltip>
+        );
+      }
+      return (
+        <Tooltip title={iconName} key={iconName}>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 36,
+              height: 36,
+              borderRadius: 6,
+              backgroundColor: '#fffaf8',
+              border: '1px dashed #ffbb96',
+              fontSize: 12,
+              fontWeight: 600,
+              color: '#d4380d',
+            }}
+          >
+            {cleanName.slice(0, 2).toUpperCase()}
+          </div>
+        </Tooltip>
+      );
+    }
+
     // 4. Iconify 官方在线实时 SVG 图（带错误自动兜底防裂图）
     const onlineSvgUrl = `https://api.iconify.design/${prefix}/${cleanName}.svg?color=%231677ff`;
     return (
@@ -574,6 +921,10 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
         description={
           <div>
             支持直连导入{' '}
+            <a href="https://www.iconfont.cn/" target="_blank" rel="noreferrer" style={{ fontWeight: 600, color: '#ff4400' }}>
+              阿里巴巴 Iconfont (iconfont.cn)
+            </a>{' '}
+            、{' '}
             <a href="https://www.streamlinehq.com/" target="_blank" rel="noreferrer" style={{ fontWeight: 600 }}>
               Streamline HQ (streamlinehq.com)
             </a>{' '}
@@ -594,7 +945,7 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
         style={{ marginBottom: 20, borderRadius: 8 }}
       />
 
-      {/* 自定义 Streamline / Iconmonstr / Iconify 图标集快速导入面板 */}
+      {/* 自定义 Streamline / Iconmonstr / Iconify / Iconfont 图标集快速导入面板 */}
       <Card
         style={{
           marginBottom: 20,
@@ -608,11 +959,29 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
           <Space>
             <CloudDownloadOutlined style={{ fontSize: 20, color: '#1677ff' }} />
             <Text strong style={{ fontSize: 15, color: '#1d39c4' }}>
-              从 Streamline HQ、Iconmonstr 或 Iconify 平台直接导入任意图标集
+              从 Iconfont、Streamline HQ、Iconmonstr 或 Iconify 平台直接导入任意图标集
             </Text>
             <Tag color="blue">实时探测与解析</Tag>
           </Space>
           <Space size={12}>
+            <Button
+              type="primary"
+              style={{ backgroundColor: '#ff4400', borderColor: '#ff4400', borderRadius: 4 }}
+              icon={<CloudDownloadOutlined />}
+              onClick={() => setIconfontModalVisible(true)}
+            >
+              从 Iconfont 导入合辑
+            </Button>
+            <Button
+              type="link"
+              size="small"
+              icon={<GlobalOutlined />}
+              href="https://www.iconfont.cn/"
+              target="_blank"
+              style={{ padding: 0, color: '#ff4400' }}
+            >
+              Iconfont 官网
+            </Button>
             <Button
               type="link"
               size="small"
@@ -652,7 +1021,7 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
               value={customInput}
               onChange={(e) => setCustomInput(e.target.value)}
               onPressEnter={handleProbe}
-              placeholder="输入前缀或链接，例如：streamline、iconmonstr、solar，或粘贴 https://iconmonstr.com/ 或 https://www.streamlinehq.com/"
+              placeholder="输入前缀或链接，例如：solar、streamline、粘贴 https://www.iconfont.cn/collections/detail?cid=54546 或 https://iconmonstr.com/"
               allowClear
               prefix={<CompassOutlined style={{ color: '#bfbfbf' }} />}
               size="large"
@@ -681,21 +1050,23 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
               marginTop: 16,
               borderRadius: 6,
               backgroundColor: '#fff',
-              borderColor: '#69b1ff',
+              borderColor: probeResult.sourcePlatform === 'iconfont' ? '#ffbb96' : '#69b1ff',
               boxShadow: '0 2px 8px rgba(22, 119, 255, 0.08)',
             }}
             bodyStyle={{ padding: 16 }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
               <div>
-                <Title level={5} style={{ margin: 0, color: '#1677ff' }}>
+                <Title level={5} style={{ margin: 0, color: probeResult.sourcePlatform === 'iconfont' ? '#d4380d' : '#1677ff' }}>
                   {probeResult.title} ({probeResult.prefix})
                 </Title>
                 <Space size={8} style={{ marginTop: 6, flexWrap: 'wrap' }}>
-                  <Tag color="cyan">{probeResult.total} 款矢量图标</Tag>
+                  <Tag color={probeResult.sourcePlatform === 'iconfont' ? 'volcano' : 'cyan'}>
+                    {probeResult.total} 款矢量图标
+                  </Tag>
                   <Tag color="purple">作者: {probeResult.author}</Tag>
-                  <Tag color="orange">开源协议: {probeResult.license}</Tag>
-                  <Tag color="blue">自动分类: {probeResult.category}</Tag>
+                  <Tag color="orange">来源: {probeResult.sourcePlatform === 'iconfont' ? '阿里巴巴 Iconfont' : probeResult.license}</Tag>
+                  <Tag color="blue">当前分类: {probeCustomCategory || probeResult.category}</Tag>
                 </Space>
               </div>
 
@@ -719,14 +1090,20 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
                 ) : (
                   <Button
                     type="primary"
+                    style={
+                      probeResult.sourcePlatform === 'iconfont'
+                        ? { backgroundColor: '#ff4400', borderColor: '#ff4400' }
+                        : undefined
+                    }
                     icon={operatingKey === probeResult.prefix ? <SyncOutlined spin /> : <DownloadOutlined />}
                     loading={operatingKey === probeResult.prefix}
                     onClick={() =>
                       handleInstall(
                         probeResult.prefix,
-                        probeResult.title,
-                        probeResult.category,
+                        probeCustomTitle.trim() || probeResult.title,
+                        probeCustomCategory.trim() || probeResult.category,
                         probeResult.total,
+                        probeCustomDescription.trim() || undefined,
                       )
                     }
                   >
@@ -734,6 +1111,45 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
                   </Button>
                 )}
               </Space>
+            </div>
+
+            {/* 用户自定义导入配置项：标题与分类 */}
+            <div
+              style={{
+                marginTop: 14,
+                padding: '10px 14px',
+                borderRadius: 6,
+                backgroundColor: probeResult.sourcePlatform === 'iconfont' ? '#fffaf8' : '#f8faff',
+                border: '1px solid ' + (probeResult.sourcePlatform === 'iconfont' ? '#ffd8bf' : '#d6e4ff'),
+              }}
+            >
+              <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8, color: '#262626' }}>
+                <SettingOutlined style={{ marginRight: 6 }} />自定义入库配置（可在此自由修改标题与分类）：
+              </Text>
+              <Row gutter={[12, 8]}>
+                <Col xs={24} sm={12}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Text type="secondary" style={{ width: 70, flexShrink: 0 }}>合辑标题：</Text>
+                    <Input
+                      size="small"
+                      value={probeCustomTitle}
+                      onChange={(e) => setProbeCustomTitle(e.target.value)}
+                      placeholder="自定义图标库标题"
+                    />
+                  </div>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Text type="secondary" style={{ width: 70, flexShrink: 0 }}>归属分类：</Text>
+                    <Input
+                      size="small"
+                      value={probeCustomCategory}
+                      onChange={(e) => setProbeCustomCategory(e.target.value)}
+                      placeholder="分类名称，例如：社交功能"
+                    />
+                  </div>
+                </Col>
+              </Row>
             </div>
 
             {probeResult.samples && probeResult.samples.length > 0 && (
@@ -781,6 +1197,7 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
           <Radio.Button value="通用系统UI">通用系统UI</Radio.Button>
           <Radio.Button value="StreamlineHQ">Streamline HQ</Radio.Button>
           <Radio.Button value="Iconmonstr">Iconmonstr</Radio.Button>
+          <Radio.Button value="Iconfont">Iconfont</Radio.Button>
           <Radio.Button value="品牌Logo">品牌 Logo</Radio.Button>
           <Radio.Button value="已安装">已安装</Radio.Button>
         </Radio.Group>
@@ -908,28 +1325,111 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
                       border: '1px dashed #e8e8e8',
                     }}
                   >
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: '#8c8c8c',
-                        marginBottom: 8,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                      }}
-                    >
-                      <span>典型图标展示：</span>
-                      <span>{isInstalled ? '本地已加载' : '官方在线实时预览'}</span>
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      {(repo.previewIcons || []).map((iconName) =>
-                        renderSinglePreview(
-                          repo.prefix || repo.key,
-                          iconName,
-                          Boolean(isInstalled),
-                          repo.sourceType,
-                        ),
-                      )}
-                    </div>
+                    {(() => {
+                      const previewCount = customIconsManager.getPaginationConfig().marketPreviewCount || 5;
+
+                      // 1. 已安装状态下：直接从本地已加载的图标池中精确匹配属于该仓库的前 N 个图标
+                      if (isInstalled) {
+                        const matchedLocalIcons = localIcons.filter((i) => {
+                          if (repo.sourceType === 'iconfont') {
+                            const cid = repo.key.replace(/^iconfont-/, '');
+                            if (i.source === `iconfont:${cid}` || i.name.startsWith(`iconfont:${cid}_`)) return true;
+                          }
+                          if (repo.category && i.category && i.category === repo.category) return true;
+                          if (repo.sourceType === 'iconify') {
+                            const p = repo.prefix || repo.key;
+                            if (i.source === `iconify:${p}` || i.name.startsWith(`${p}:`)) return true;
+                          }
+                          if (repo.key === 'iconmonstr' || repo.sourceType === 'iconmonstr') {
+                            if (i.source === 'iconmonstr' || i.source === 'repo:iconmonstr' || i.category === 'iconmonstr') return true;
+                          }
+                          if (repo.key === 'caomei' || repo.sourceType === 'zip') {
+                            if (i.source === 'caomei' || i.source === 'repo:caomei' || i.category === '草莓图标库 (Caomei)') return true;
+                          }
+                          return false;
+                        });
+
+                        if (matchedLocalIcons.length > 0) {
+                          const topN = matchedLocalIcons.slice(0, previewCount);
+                          return (
+                            <>
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  color: '#8c8c8c',
+                                  marginBottom: 8,
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                }}
+                              >
+                                <span>典型图标展示：</span>
+                                <span style={{ color: '#52c41a' }}>已入库 (显示前 {topN.length} 个)</span>
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                {topN.map((localIcon) => (
+                                  <Tooltip
+                                    title={localIcon.title ? `${localIcon.title} (${localIcon.name})` : localIcon.name}
+                                    key={localIcon.name}
+                                  >
+                                    <div
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        width: 36,
+                                        height: 36,
+                                        borderRadius: 6,
+                                        backgroundColor: '#fff',
+                                        border: '1px solid #b7eb8f',
+                                        fontSize: 20,
+                                        color: '#52c41a',
+                                        transition: 'all 0.2s',
+                                      }}
+                                      dangerouslySetInnerHTML={{ __html: sanitizeAndFormatSvg(localIcon.svg) }}
+                                    />
+                                  </Tooltip>
+                                ))}
+                              </div>
+                            </>
+                          );
+                        }
+                      }
+
+                      // 2. 若未安装或本地尚未查到，则从 repo.previewIcons 中展示前 N 个
+                      const previewList = (repo.previewIcons || []).slice(0, previewCount);
+                      return (
+                        <>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: '#8c8c8c',
+                              marginBottom: 8,
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                            }}
+                          >
+                            <span>典型图标展示：</span>
+                            <span>{isInstalled ? '本地已加载' : '官方在线实时预览'}</span>
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                            {previewList.length > 0 ? (
+                              previewList.map((iconName) =>
+                                renderSinglePreview(
+                                  repo.prefix || repo.key,
+                                  iconName,
+                                  Boolean(isInstalled),
+                                  repo.sourceType,
+                                ),
+                              )
+                            ) : (
+                              <div style={{ fontSize: 12, color: '#bfbfbf', padding: '6px 0' }}>
+                                {isInstalled ? '暂无图标预览' : '未提供预览'}
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
 
                   {/* 底部操作工具栏 */}
@@ -964,18 +1464,26 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
                             {isInstalled ? '分页面拉取更多页面' : '分页面拉取所有页面'}
                           </Button>
                           {isInstalled ? (
-                            <Popconfirm
-                              title={`确认卸载 [${repo.title}]？`}
-                              description="卸载后将清空已导入的该库图标（不影响用户手动上传的图标）。"
-                              okText="卸载"
-                              cancelText="取消"
-                              okButtonProps={{ danger: true }}
-                              onConfirm={() => handleUninstall(repo.key, repo.title)}
-                            >
-                              <Button danger icon={<DeleteOutlined />} loading={isOperating}>
-                                一键卸载
+                            <>
+                              <Button
+                                icon={<EditOutlined />}
+                                onClick={() => handleOpenEditRepoModal(repo)}
+                              >
+                                修改配置
                               </Button>
-                            </Popconfirm>
+                              <Popconfirm
+                                title={`确认卸载 [${repo.title}]？`}
+                                description="卸载后将清空已导入的该库图标（不影响用户手动上传的图标）。"
+                                okText="卸载"
+                                cancelText="取消"
+                                okButtonProps={{ danger: true }}
+                                onConfirm={() => handleUninstall(repo.key, repo.title)}
+                              >
+                                <Button danger icon={<DeleteOutlined />} loading={isOperating}>
+                                  一键卸载
+                                </Button>
+                              </Popconfirm>
+                            </>
                           ) : null}
                         </>
                       ) : isInstalled ? (
@@ -992,6 +1500,12 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
                               扩容更新 ({repo.installedCount} → {repo.iconCount})
                             </Button>
                           ) : null}
+                          <Button
+                            icon={<EditOutlined />}
+                            onClick={() => handleOpenEditRepoModal(repo)}
+                          >
+                            修改配置
+                          </Button>
                           <Popconfirm
                             title={`确认卸载 [${repo.title}]？`}
                             description="卸载后将清空已导入的该库图标（不影响用户手动上传的图标）。"
@@ -1221,6 +1735,303 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
               }}
             >
               {crawlRunning ? '中止并关闭' : '关闭'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 阿里巴巴 Iconfont 平台合辑一键导入弹窗 */}
+      <Modal
+        title={
+          <Space>
+            <CloudDownloadOutlined style={{ color: '#ff4400' }} />
+            <span>从阿里巴巴 Iconfont 平台导入矢量合辑</span>
+          </Space>
+        }
+        open={iconfontModalVisible}
+        onCancel={() => {
+          if (!iconfontImporting) {
+            setIconfontModalVisible(false);
+          }
+        }}
+        footer={null}
+        width={680}
+        destroyOnClose
+      >
+        <div style={{ paddingTop: 8 }}>
+          <Alert
+            type="info"
+            showIcon
+            message="支持直接粘贴 Iconfont 公开合辑链接或纯合辑 ID，系统将免登直连拉取合辑内全部矢量图标并永久保存。"
+            description="例如: https://www.iconfont.cn/collections/detail?spm=a313x.user_detail.i1.dc64b3430.1b093a81fig5tS&cid=54546 或直接输入 54546"
+            style={{ marginBottom: 16 }}
+          />
+
+          <div style={{ marginBottom: 16 }}>
+            <Text strong style={{ display: 'block', marginBottom: 8 }}>
+              Iconfont 合辑链接或合辑 ID (cid)：
+            </Text>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Input
+                value={iconfontInput}
+                onChange={(e) => setIconfontInput(e.target.value)}
+                placeholder="例如: https://www.iconfont.cn/collections/detail?cid=54546 或 54546"
+                allowClear
+                onPressEnter={handleProbeIconfontModal}
+                disabled={iconfontProbing || iconfontImporting}
+              />
+              <Button
+                type="primary"
+                style={{ backgroundColor: '#ff4400', borderColor: '#ff4400' }}
+                icon={iconfontProbing ? <SyncOutlined spin /> : <SearchOutlined />}
+                loading={iconfontProbing}
+                onClick={handleProbeIconfontModal}
+                disabled={iconfontImporting}
+              >
+                探测合辑
+              </Button>
+            </div>
+          </div>
+
+          {iconfontProbeData && (
+            <Card
+              size="small"
+              style={{
+                marginBottom: 16,
+                borderColor: '#ffbb96',
+                background: '#fffaf8',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                <div>
+                  <Title level={5} style={{ margin: 0, color: '#d4380d' }}>
+                    {iconfontProbeData.title}
+                  </Title>
+                  <Text type="secondary" style={{ fontSize: 13, display: 'block', marginTop: 4 }}>
+                    {iconfontProbeData.description}
+                  </Text>
+                  <Space size={8} style={{ marginTop: 6, flexWrap: 'wrap' }}>
+                    <Tag color="volcano">合辑编号: {iconfontProbeData.cid}</Tag>
+                    <Tag color="orange">共 {iconfontProbeData.total} 款矢量图标</Tag>
+                    {iconfontProbeData.creator && <Tag color="blue">创建者: {iconfontProbeData.creator}</Tag>}
+                  </Space>
+                </div>
+                <Button
+                  type="link"
+                  icon={<LinkOutlined />}
+                  href={iconfontProbeData.homepage}
+                  target="_blank"
+                >
+                  在 Iconfont 查看
+                </Button>
+              </div>
+
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: '12px 14px',
+                  borderRadius: 6,
+                  backgroundColor: '#fff',
+                  border: '1px solid #ffd8bf',
+                }}
+              >
+                <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 10, color: '#d4380d' }}>
+                  <SettingOutlined style={{ marginRight: 6 }} />入库自定义配置（可自由修改标题、分类与描述）：
+                </Text>
+                <Row gutter={[16, 12]}>
+                  <Col span={12}>
+                    <Text strong style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                      合辑展示标题：
+                    </Text>
+                    <Input
+                      value={iconfontCustomTitle}
+                      onChange={(e) => setIconfontCustomTitle(e.target.value)}
+                      placeholder="合辑标题，例如：社交功能"
+                      disabled={iconfontImporting}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <Text strong style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                      归属分类名称：
+                    </Text>
+                    <Input
+                      value={iconfontCustomCategory}
+                      onChange={(e) => setIconfontCustomCategory(e.target.value)}
+                      placeholder="分类名称，例如：社交"
+                      disabled={iconfontImporting}
+                    />
+                  </Col>
+                  <Col span={24}>
+                    <Text strong style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                      说明与描述：
+                    </Text>
+                    <Input.TextArea
+                      value={iconfontCustomDescription}
+                      onChange={(e) => setIconfontCustomDescription(e.target.value)}
+                      placeholder="合辑说明描述（可选）"
+                      rows={2}
+                      disabled={iconfontImporting}
+                    />
+                  </Col>
+                </Row>
+              </div>
+
+              {iconfontProbeData.samples && iconfontProbeData.samples.length > 0 && (
+                <div style={{ marginTop: 14 }}>
+                  <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                    图标预览展示（部分）：
+                  </Text>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, maxHeight: 180, overflowY: 'auto', padding: 4 }}>
+                    {iconfontProbeData.samples.map((item: any, idx: number) => (
+                      <Tooltip title={item.name} key={item.id || idx}>
+                        <div
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: 36,
+                            height: 36,
+                            borderRadius: 6,
+                            backgroundColor: '#fff',
+                            border: '1px solid #e8e8e8',
+                            fontSize: 20,
+                            padding: 4,
+                          }}
+                          dangerouslySetInnerHTML={{ __html: sanitizeAndFormatSvg(item.show_svg) }}
+                        />
+                      </Tooltip>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Card>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+            <Button
+              onClick={() => setIconfontModalVisible(false)}
+              disabled={iconfontImporting}
+            >
+              取消
+            </Button>
+            <Button
+              type="primary"
+              style={{ backgroundColor: '#ff4400', borderColor: '#ff4400' }}
+              icon={iconfontImporting ? <SyncOutlined spin /> : <CloudDownloadOutlined />}
+              loading={iconfontImporting}
+              disabled={!iconfontProbeData}
+              onClick={handleImportIconfontModal}
+            >
+              一键导入该合辑 ({iconfontProbeData ? `${iconfontProbeData.total} 款图标` : '待探测'})
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 修改仓库配置弹窗（支持级联更新图标分类） */}
+      <Modal
+        title={
+          <Space>
+            <EditOutlined style={{ color: '#1677ff' }} />
+            <span>修改图标库配置 · {editingRepo?.title}</span>
+          </Space>
+        }
+        open={editModalVisible}
+        onCancel={() => {
+          if (!savingEdit) {
+            setEditModalVisible(false);
+            setEditingRepo(null);
+          }
+        }}
+        footer={null}
+        width={600}
+        destroyOnClose
+      >
+        <div style={{ paddingTop: 8 }}>
+          <Alert
+            type="info"
+            showIcon
+            message="配置修改说明"
+            description="修改分类名称后，系统将自动级联更新该图标库下所有已入库图标的所属分类，并在全局图标选择器与菜单中即刻同步生效。"
+            style={{ marginBottom: 16 }}
+          />
+
+          <div style={{ marginBottom: 14 }}>
+            <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 6 }}>
+              仓库唯一标识 (Key)：
+            </Text>
+            <Input value={editingRepo?.key || ''} disabled style={{ backgroundColor: '#f5f5f5' }} />
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 6 }}>
+              仓库展示标题 (Title)：<span style={{ color: '#ff4d4f' }}>*</span>
+            </Text>
+            <Input
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              placeholder="请输入仓库展示标题"
+              disabled={savingEdit}
+            />
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 6 }}>
+              所属图标分类 (Category)：<span style={{ color: '#ff4d4f' }}>*</span>
+            </Text>
+            <Input
+              value={editCategory}
+              onChange={(e) => setEditCategory(e.target.value)}
+              placeholder="请输入所属分类名称"
+              disabled={savingEdit}
+            />
+            <Text type="secondary" style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
+              提示：若修改此分类，数据库中归属于该仓库的所有矢量图标分类将自动同步变更。
+            </Text>
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 6 }}>
+              官方主页链接 (Homepage)：
+            </Text>
+            <Input
+              value={editHomepage}
+              onChange={(e) => setEditHomepage(e.target.value)}
+              placeholder="官方或合辑主页链接"
+              disabled={savingEdit}
+            />
+          </div>
+
+          <div style={{ marginBottom: 20 }}>
+            <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 6 }}>
+              说明与描述 (Description)：
+            </Text>
+            <Input.TextArea
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              placeholder="请输入关于此图标库的说明"
+              rows={3}
+              disabled={savingEdit}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+            <Button
+              onClick={() => {
+                setEditModalVisible(false);
+                setEditingRepo(null);
+              }}
+              disabled={savingEdit}
+            >
+              取消
+            </Button>
+            <Button
+              type="primary"
+              icon={savingEdit ? <SyncOutlined spin /> : <CheckCircleOutlined />}
+              loading={savingEdit}
+              onClick={handleSaveEditRepo}
+            >
+              保存并同步生效
             </Button>
           </div>
         </div>

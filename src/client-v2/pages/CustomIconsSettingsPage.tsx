@@ -12,6 +12,7 @@ import {
   CheckOutlined,
   UndoOutlined,
   ThunderboltOutlined,
+  TagsOutlined,
 } from '@ant-design/icons';
 import {
   customIconsManager,
@@ -24,6 +25,7 @@ import { CustomIconModal } from '../components/CustomIconModal';
 import { EditIconModal } from '../components/EditIconModal';
 import { IconRepoMarket } from '../components/IconRepoMarket';
 import { EnhancedIconPicker } from '../components/EnhancedIconPicker';
+import { SubCategoriesSettingsPanel } from '../components/SubCategoriesSettingsPanel';
 
 const { Title, Text } = Typography;
 
@@ -143,9 +145,19 @@ export const CustomIconsSettingsPage: React.FC<{ api: any }> = ({ api }) => {
                     <Space>
                       <span>分类筛选：</span>
                       <Select
-                        style={{ width: 180 }}
+                        style={{ width: 200 }}
                         value={filterCat}
                         onChange={setFilterCat}
+                        showSearch
+                        placeholder="搜索或选择分类"
+                        optionFilterProp="label"
+                        filterOption={(input, option) => {
+                          if (!input) return true;
+                          const lower = input.trim().toLowerCase();
+                          const labelStr = String(option?.label || '');
+                          const valueStr = String(option?.value || '');
+                          return labelStr.toLowerCase().includes(lower) || valueStr.toLowerCase().includes(lower);
+                        }}
                         options={[
                           { label: '全部分类', value: 'all' },
                           ...categories.map((c) => ({
@@ -352,6 +364,32 @@ export const CustomIconsSettingsPage: React.FC<{ api: any }> = ({ api }) => {
                           ]}
                         />
                       </div>
+
+                      <Divider style={{ margin: '4px 0' }} />
+
+                      {/* 4. 仓库市场卡片展示图标数量 */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 14 }}>图库市场卡片典型图标展示数量</div>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            控制在「Icon 仓库管理」卡片中，已安装或预览区域直接引用并展示的典型图标数量（支持 1 ~ 30 款，推荐 5 ~ 12 款）。
+                          </Text>
+                        </div>
+                        <InputNumber
+                          min={1}
+                          max={30}
+                          step={1}
+                          value={paginationSettings.marketPreviewCount ?? 5}
+                          onChange={(val) =>
+                            setPaginationSettings((prev) => ({
+                              ...prev,
+                              marketPreviewCount: Math.min(30, Math.max(1, Number(val) || 5)),
+                            }))
+                          }
+                          style={{ width: 140 }}
+                          addonAfter="款"
+                        />
+                      </div>
                     </div>
 
                     <div
@@ -397,6 +435,17 @@ export const CustomIconsSettingsPage: React.FC<{ api: any }> = ({ api }) => {
                     </div>
                   </Card>
                 </div>
+              ),
+            },
+            {
+              key: 'subCategories',
+              label: (
+                <span>
+                  <TagsOutlined /> 分类规则配置
+                </span>
+              ),
+              children: (
+                <SubCategoriesSettingsPanel api={api} icons={icons} categories={categories} />
               ),
             },
           ]}

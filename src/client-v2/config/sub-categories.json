@@ -4,22 +4,28 @@
     { "key": "line", "label": "线框风格", "matchType": "endsWith", "pattern": "-l" },
     { "key": "solid", "label": "实底风格", "matchType": "notEndsWith", "pattern": "-l" },
     {
+      "key": "interface",
+      "label": "界面交互",
+      "matchType": "regex",
+      "pattern": "add|close|check|about|block|circle|square|triangle|menu|more|layers|layout|setting|configuration|control|operation|slider|tab|search|trash|renew|warning|lock|key|shield|eye|scan|qrcode|bell|nail|box|inbox|collection|come|out|category|choose-list|label-info|link|new|tag|choose"
+    },
+    {
       "key": "office",
       "label": "常用办公",
       "matchType": "regex",
-      "pattern": "doc|file|folder|book|paper|clip|calendar|clipboard|pen|edit|save|read|certificate|ruler|scissors|printer"
+      "pattern": "doc|file|folder|book|bookmark|paper|clip|calendar|clock|time|clipboard|pen|write|edit|save|read|certificate|ruler|scissors|printer|newspaper|text|blackboard|board|brush|rollerbrush|hammer|wrench|briefcase"
     },
     {
       "key": "devices",
       "label": "电子设备",
       "matchType": "regex",
-      "pattern": "computer|laptop|mobile|pad|phone|tv|watch|router|server|mouse|keyboard|hdmi|usb|battery|disk|storage|sdcard|webcam|microchip"
+      "pattern": "computer|laptop|mobile|pad|phone|tv|watch|router|server|servers|mouse|keyboard|hdmi|usb|battery|disk|storage|sdcard|webcam|microchip|bluetooth|wifi|port|robot"
     },
     {
       "key": "arrows",
       "label": "方向交互",
       "matchType": "regex",
-      "pattern": "angle|arrow|bevel|camber|hand-slide|down|up|left|right|turn|expand|shrink|hand-"
+      "pattern": "angle|arrow|bevel|camber|hand-slide|down|up|left|right|turn|expand|shrink|hand|pointer|transmission|transport"
     },
     {
       "key": "media",
@@ -31,13 +37,37 @@
       "key": "finance",
       "label": "商业金融",
       "matchType": "regex",
-      "pattern": "buy|shopping|coin|money|bitcoin|credit|pay|red-envelope|alipay|shop|ticket|diamond|crown"
+      "pattern": "buy|shopping|coin|money|bitcoin|credit|pay|red-envelope|alipay|shop|ticket|diamond|crown|cup|gift|calculator|product"
+    },
+    {
+      "key": "data",
+      "label": "数据图表",
+      "matchType": "regex",
+      "pattern": "analysis|bar-chart|chart|dashboard|rank"
+    },
+    {
+      "key": "code",
+      "label": "代码研发",
+      "matchType": "regex",
+      "pattern": "code|command|hacker|bug|chemistry|plugin|program|css3|html5|firewall|network"
+    },
+    {
+      "key": "social",
+      "label": "社交用户",
+      "matchType": "regex",
+      "pattern": "user|people|face|message|comment|talk|forum|moments|share|paper-plane|heart|star|thumbs-up|medal|taiji|sword|game|pokemon|commed|rss"
+    },
+    {
+      "key": "travel",
+      "label": "出行生活",
+      "matchType": "regex",
+      "pattern": "airplane|truck|rocket|earth|map|location|cloud|sun|moon|fire|light|lightning|building|greatwall|home|clothes"
     },
     {
       "key": "brands",
       "label": "网络品牌",
       "matchType": "regex",
-      "pattern": "alipay|bilibili|baidu|chrome|github|apple|android|google|microsoft|linux|qq|weibo|weixin|zhihu|youtube|twitter|facebook|vimeo|v2ex|steam|paypal"
+      "pattern": "alipay|bilibili|baidu|chrome|github|apple|android|google|microsoft|linux|qq|qzone|weibo|weixin|zhihu|youtube|twitter|facebook|vimeo|v2ex|steam|paypal|taobao|tmall|dribbble|dropbox|instagram|pinterest|telegram|wordpress|raspberry"
     }
   ],
   "builtin": [
@@ -46,31 +76,61 @@
       "key": "direction",
       "label": "方向指示",
       "matchType": "regex",
-      "pattern": "up|down|left|right|arrow|chevron|caret|double"
+      "pattern": "up|down|left|right|arrow|chevron|caret|double|retweet|swap|rollback|expand|shrink|fullscreen"
     },
     {
       "key": "suggested",
       "label": "提示建议",
       "matchType": "regex",
-      "pattern": "check|close|info|exclamation|question|warning|stop|clock"
+      "pattern": "check|close|info|exclamation|question|warning|stop|clock|alert|bell|safety|shield"
     },
     {
       "key": "editor",
-      "label": "编辑通用",
+      "label": "编辑操作",
       "matchType": "regex",
-      "pattern": "edit|copy|delete|form|file|folder|save|setting|search|scissor|link"
+      "pattern": "edit|copy|delete|form|file|folder|save|setting|search|scissor|link|plus|minus|undo|redo|drag|filter|clear|orderedlist|unorderedlist"
+    },
+    {
+      "key": "application",
+      "label": "系统界面",
+      "matchType": "regex",
+      "pattern": "home|setting|search|filter|menu|more|bars|control|sliders|tool|dashboard|appstore|cluster|api|skin|poweroff|reload|sync|audit|security|lock|unlock|key|eye"
+    },
+    {
+      "key": "user",
+      "label": "用户社交",
+      "matchType": "regex",
+      "pattern": "user|team|smile|frown|meh|heart|like|dislike|message|comment|customer|contacts|idcard|trophy|crown|star"
+    },
+    {
+      "key": "office",
+      "label": "办公文件",
+      "matchType": "regex",
+      "pattern": "file|folder|doc|book|read|paperclip|schedule|calendar|clock|history|hourglass|inbox|mail|printer|save|snippets|tag|tags|table"
+    },
+    {
+      "key": "devices",
+      "label": "硬件设备",
+      "matchType": "regex",
+      "pattern": "desktop|laptop|mobile|tablet|phone|scan|qrcode|barcode|camera|video|audio|sound|cloud|wifi|usb|database|hdd|server|compass"
+    },
+    {
+      "key": "commerce",
+      "label": "商业金融",
+      "matchType": "regex",
+      "pattern": "shopping|cart|pay|wallet|account|bank|dollar|euro|pound|creditcard|transaction|redenvelope|gift|trophy|crown"
     },
     {
       "key": "data",
       "label": "数据图表",
       "matchType": "regex",
-      "pattern": "chart|pie|bar|line|stock|dot|dashboard|database"
+      "pattern": "chart|pie|bar|line|stock|dot|area|radar|fall|rise|fund|dashboard|database"
     },
     {
       "key": "brand",
       "label": "品牌商标",
       "matchType": "regex",
-      "pattern": "alipay|wechat|github|google|apple|android|windows|ie|chrome"
+      "pattern": "alipay|wechat|github|google|apple|android|windows|ie|chrome|gitlab|slack|twitter|youtube|facebook|linkedin"
     }
   ],
   "universal": [
@@ -79,55 +139,85 @@
       "key": "arrows",
       "label": "方向箭头",
       "matchType": "regex",
-      "pattern": "arrow|chevron|caret|angle|direction|up|down|left|right|forward|back|corner|expand|shrink|collapse|move|rotate|undo|redo|sort"
+      "pattern": "arrow|chevron|caret|angle|direction|up|down|left|right|forward|back|corner|expand|shrink|collapse|move|rotate|undo|redo|sort|transfer|swap"
     },
     {
       "key": "interface",
       "label": "通用界面",
       "matchType": "regex",
-      "pattern": "home|setting|cog|gear|search|filter|menu|more|list|grid|check|cross|close|x$|plus|add|minus|info|help|alert|warn|bell|lock|unlock|key|eye|shield|user|profile|log"
+      "pattern": "home|setting|cog|gear|search|filter|menu|more|list|grid|check|cross|close|plus|add|minus|info|help|alert|warn|bell|lock|unlock|key|eye|shield|user|profile|log|trash|delete|copy|cut|paste|tag|flag|slider|switch|power|refresh|sync"
     },
     {
       "key": "office",
       "label": "办公文档",
       "matchType": "regex",
-      "pattern": "file|folder|doc|edit|pencil|pen|paper|clipboard|calendar|date|time|clock|book|bookmark|save|trash|delete|copy|cut|paste|tag|flag"
+      "pattern": "file|folder|doc|edit|pencil|pen|paper|clipboard|calendar|date|time|clock|book|bookmark|save|text|font|format|table|align|quote|link|attachment|clip|printer|archive|box|inbox"
     },
     {
       "key": "devices",
       "label": "硬件设备",
       "matchType": "regex",
-      "pattern": "computer|laptop|pc|mobile|phone|smartphone|tablet|screen|monitor|tv|display|watch|camera|battery|hard-drive|server|database|cpu|chip|usb|wifi|bluetooth|printer|mouse|keyboard"
+      "pattern": "computer|laptop|pc|mobile|phone|smartphone|tablet|screen|monitor|tv|display|watch|camera|battery|hard-drive|server|database|cpu|chip|usb|wifi|bluetooth|printer|mouse|keyboard|router|hardware|disk|sdcard|webcam"
     },
     {
       "key": "media",
-      "label": "多媒体",
+      "label": "媒体影音",
       "matchType": "regex",
-      "pattern": "music|audio|sound|volume|mic|microphone|video|movie|film|play|pause|stop|record|disc|album|radio|image|photo|picture"
+      "pattern": "music|audio|sound|volume|mic|microphone|video|movie|film|play|pause|stop|record|disc|album|radio|image|photo|picture|gallery|camera|headset|headphones|speaker"
     },
     {
       "key": "finance",
       "label": "商业金融",
       "matchType": "regex",
-      "pattern": "shopping|cart|bag|credit|card|wallet|dollar|money|cash|coin|currency|bank|shop|store|percent|percentage|chart|graph|trending|receipt|invoice"
+      "pattern": "shopping|cart|bag|credit|card|wallet|dollar|money|cash|coin|currency|bank|shop|store|percent|percentage|chart|graph|trending|receipt|invoice|price|tag|diamond|crown|gift|coupon|fund|stock"
     },
     {
       "key": "communication",
       "label": "通讯社交",
       "matchType": "regex",
-      "pattern": "mail|email|envelope|message|chat|comment|send|share|phone-call|at-sign|rss|link|globe|network|share-2|heart|star|thumbs"
+      "pattern": "mail|email|envelope|message|chat|comment|send|share|phone-call|at-sign|rss|link|globe|network|share-2|heart|star|thumbs|like|feed|forum|voice|podcast|broadcast"
+    },
+    {
+      "key": "data",
+      "label": "数据图表",
+      "matchType": "regex",
+      "pattern": "chart|graph|analytics|dashboard|bar|pie|line|scatter|trending|increase|decrease|metric|statistic|report|database|server|cluster"
+    },
+    {
+      "key": "code",
+      "label": "研发代码",
+      "matchType": "regex",
+      "pattern": "code|terminal|console|command|branch|fork|commit|git|bug|debug|api|brackets|syntax|html|css|json|database|server|cloud|deploy|docker|cpu"
+    },
+    {
+      "key": "security",
+      "label": "安全权限",
+      "matchType": "regex",
+      "pattern": "shield|lock|unlock|key|password|protect|guard|safe|verified|badge|fingerprint|scan|face-id|certificate|access|permission|audit|firewall"
     },
     {
       "key": "weather",
       "label": "自然天气",
       "matchType": "regex",
-      "pattern": "sun|moon|cloud|rain|snow|wind|lightning|thermometer|umbrella|drop|flame|fire|leaf|flower|tree|globe|earth|map|pin|navigation|compass"
+      "pattern": "sun|moon|cloud|rain|snow|wind|lightning|thermometer|umbrella|drop|flame|fire|leaf|flower|tree|globe|earth|map|pin|navigation|compass|water|nature"
+    },
+    {
+      "key": "travel",
+      "label": "交通地图",
+      "matchType": "regex",
+      "pattern": "car|bus|truck|train|subway|plane|airplane|flight|bike|bicycle|ship|boat|rocket|map|navigation|compass|pin|marker|location|road|gas|fuel|ticket"
+    },
+    {
+      "key": "health",
+      "label": "医疗健康",
+      "matchType": "regex",
+      "pattern": "health|medical|cross|heart-pulse|hospital|doctor|pill|drug|virus|dna|microscope|thermometer|band-aid|fitness|activity|pulse"
     },
     {
       "key": "brand",
       "label": "知名品牌",
       "matchType": "regex",
-      "pattern": "github|google|apple|android|windows|chrome|alipay|wechat|twitter|facebook|youtube|slack|figma|docker|npm|git|react|vue"
+      "pattern": "github|google|apple|android|windows|chrome|alipay|wechat|twitter|facebook|youtube|slack|figma|docker|npm|git|react|vue|bilibili|zhihu|weibo|tiktok|instagram|linkedin|telegram|discord|paypal|shopify|stripe|aws|azure"
     }
   ]
 }

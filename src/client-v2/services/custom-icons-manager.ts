@@ -3,6 +3,7 @@ import * as AntdIcons from '@ant-design/icons';
 import { registerIcon, icons } from '@nocobase/client-v2';
 import { createSvgIconComponent, sanitizeAndFormatSvg } from '../utils/svg-helper';
 import { parseIconValue } from '../utils/icon-style-helper';
+import subCategoriesPreset from '../config/sub-categories.json';
 
 export interface CustomIconItem {
   id?: number | string;
@@ -20,17 +21,58 @@ export interface IconPaginationConfig {
   enablePagination: boolean;
   threshold: number;
   pageSize: number;
+  marketPreviewCount?: number;
 }
 
 export const DEFAULT_PAGINATION_CONFIG: IconPaginationConfig = {
   enablePagination: true,
   threshold: 500,
   pageSize: 200,
+  marketPreviewCount: 5,
 };
+
+export interface RawSubCategoryConfig {
+  key: string;
+  label: string;
+  matchType?: 'regex' | 'endsWith' | 'notEndsWith' | 'all';
+  pattern?: string;
+}
+
+export interface SubCategoryDef {
+  key: string;
+  label: string;
+  filter: (name: string, item?: any) => boolean;
+}
+
+export function parseSubCategoryRules(rawList: RawSubCategoryConfig[] = []): SubCategoryDef[] {
+  return (rawList || []).map((item) => {
+    if (!item.matchType || item.matchType === 'all' || !item.pattern) {
+      return { key: item.key, label: item.label, filter: () => true };
+    }
+    if (item.matchType === 'endsWith') {
+      const p = item.pattern;
+      return { key: item.key, label: item.label, filter: (n: string) => n.endsWith(p) };
+    }
+    if (item.matchType === 'notEndsWith') {
+      const p = item.pattern;
+      return { key: item.key, label: item.label, filter: (n: string) => !n.endsWith(p) };
+    }
+    if (item.matchType === 'regex') {
+      try {
+        const reg = new RegExp(item.pattern, 'i');
+        return { key: item.key, label: item.label, filter: (n: string) => reg.test(n) };
+      } catch (e) {
+        return { key: item.key, label: item.label, filter: () => true };
+      }
+    }
+    return { key: item.key, label: item.label, filter: () => true };
+  });
+}
 
 const CACHE_KEY = 'NOCOBASE_CUSTOM_ICONS_CACHE_V2';
 const STYLED_CACHE_KEY = 'NOCOBASE_STYLED_ICONS_CACHE_V2';
 const PAGINATION_CONFIG_KEY = 'NOCOBASE_ICON_PAGINATION_CONFIG_V2';
+const SUB_CATEGORIES_CONFIG_KEY = 'NOCOBASE_SUB_CATEGORIES_CONFIG_V2';
 
 /**
  * Ant Design 官方全量图标组件映射字典（大小写不敏感索引，确保首屏及任意时刻 100% 命中）
@@ -195,6 +237,7 @@ class CustomIconsManager {
   private hostIconComponent: any = null;
   private registeredComponents: Map<string, any> = new Map();
   private paginationConfig: IconPaginationConfig = { ...DEFAULT_PAGINATION_CONFIG };
+  private subCategoriesConfig: Record<string, RawSubCategoryConfig[]> = (subCategoriesPreset as any) || {};
 
   private constructor() {
     // 1. 立即挂载本地 icons Map 的代理拦截器
@@ -214,7 +257,10 @@ class CustomIconsManager {
     // 5. 从 localStorage 恢复分页配置
     this.restorePaginationConfigFromCache();
 
-    // 6. 启动后台主应用宿主 Icon 探测器
+    // 6. 从 localStorage 恢复分类规则配置
+    this.restoreSubCategoriesConfigFromCache();
+
+    // 7. 启动后台主应用宿主 Icon 探测器
     this.scheduleHostIconDetection();
   }
 
@@ -350,6 +396,7 @@ class CustomIconsManager {
           enablePagination: parsed.enablePagination !== false,
           threshold: typeof parsed.threshold === 'number' ? parsed.threshold : 500,
           pageSize: typeof parsed.pageSize === 'number' ? parsed.pageSize : 200,
+          marketPreviewCount: typeof parsed.marketPreviewCount === 'number' ? parsed.marketPreviewCount : 5,
         };
       }
     } catch (e) {}
@@ -378,6 +425,7 @@ class CustomIconsManager {
           enablePagination: data.enablePagination !== false,
           threshold: typeof data.threshold === 'number' ? data.threshold : 500,
           pageSize: typeof data.pageSize === 'number' ? data.pageSize : 200,
+          marketPreviewCount: typeof data.marketPreviewCount === 'number' ? data.marketPreviewCount : 5,
         };
         if (typeof window !== 'undefined' && window.localStorage) {
           try {
@@ -401,6 +449,10 @@ class CustomIconsManager {
       enablePagination: config.enablePagination !== undefined ? Boolean(config.enablePagination) : this.paginationConfig.enablePagination,
       threshold: typeof config.threshold === 'number' ? Math.max(0, config.threshold) : this.paginationConfig.threshold,
       pageSize: typeof config.pageSize === 'number' ? Math.max(10, config.pageSize) : this.paginationConfig.pageSize,
+      marketPreviewCount:
+        typeof config.marketPreviewCount === 'number'
+          ? Math.min(30, Math.max(1, config.marketPreviewCount))
+          : (this.paginationConfig.marketPreviewCount || 5),
     };
     this.paginationConfig = nextConfig;
     if (typeof window !== 'undefined' && window.localStorage) {
@@ -415,13 +467,137 @@ class CustomIconsManager {
         await api.request({
           url: 'customIconRepos:saveSettings',
           method: 'post',
-          data: nextConfig,
+          data: {
+            ...nextConfig,
+            subCategories: this.subCategoriesConfig,
+          },
         });
       } catch (e) {
         console.warn('Failed to save pagination settings to server:', e);
       }
     }
     return nextConfig;
+  }
+
+  /**
+   * 从 localStorage 恢复分类规则配置
+   */
+  private restoreSubCategoriesConfigFromCache() {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    try {
+      const raw = window.localStorage.getItem(SUB_CATEGORIES_CONFIG_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          this.subCategoriesConfig = {
+            ...((subCategoriesPreset as any) || {}),
+            ...parsed,
+          };
+        }
+      }
+    } catch (e) {}
+  }
+
+  /**
+   * 获取子分类完整配置字典
+   */
+  public getSubCategoriesConfig(): Record<string, RawSubCategoryConfig[]> {
+    return {
+      ...((subCategoriesPreset as any) || {}),
+      ...this.subCategoriesConfig,
+    };
+  }
+
+  /**
+   * 根据当前大分类/图库 key 获取对应解析后的子分类定义列表
+   */
+  public getSubCategories(categoryKey?: string): SubCategoryDef[] {
+    const config = this.getSubCategoriesConfig();
+    const key = categoryKey || 'universal';
+
+    // 1. 如果配置中存在该图库的专有规则
+    if (config[key] && Array.isArray(config[key]) && config[key].length > 0) {
+      return parseSubCategoryRules(config[key]);
+    }
+
+    // 2. 如果是系统内置 Ant Design 图标
+    if (['builtin', 'outlined', 'filled', 'twotone'].includes(key.toLowerCase())) {
+      return parseSubCategoryRules(config['builtin'] || (subCategoriesPreset as any)?.builtin || []);
+    }
+
+    // 3. 默认通用规则
+    return parseSubCategoryRules(config['universal'] || (subCategoriesPreset as any)?.universal || []);
+  }
+
+  /**
+   * 从服务端拉取最新分类规则配置
+   */
+  public async loadSubCategoriesConfig(client?: any): Promise<Record<string, RawSubCategoryConfig[]>> {
+    const api = client || this.apiClient;
+    if (!api) return this.getSubCategoriesConfig();
+    try {
+      const res = await api.request({
+        url: 'customIconRepos:getSettings',
+      });
+      const data = res?.data?.data || res?.data;
+      if (data && data.subCategories && typeof data.subCategories === 'object') {
+        this.subCategoriesConfig = {
+          ...((subCategoriesPreset as any) || {}),
+          ...data.subCategories,
+        };
+        if (typeof window !== 'undefined' && window.localStorage) {
+          try {
+            window.localStorage.setItem(SUB_CATEGORIES_CONFIG_KEY, JSON.stringify(this.subCategoriesConfig));
+          } catch (e) {}
+        }
+        this.notify();
+      }
+    } catch (e) {
+      // ignore
+    }
+    return this.getSubCategoriesConfig();
+  }
+
+  /**
+   * 保存并广播分类规则配置
+   */
+  public async saveSubCategoriesConfig(
+    config: Record<string, RawSubCategoryConfig[]>,
+    client?: any,
+  ): Promise<Record<string, RawSubCategoryConfig[]>> {
+    const api = client || this.apiClient;
+    this.subCategoriesConfig = { ...config };
+
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(SUB_CATEGORIES_CONFIG_KEY, JSON.stringify(this.subCategoriesConfig));
+      } catch (e) {}
+    }
+    this.notify();
+
+    if (api) {
+      try {
+        await api.request({
+          url: 'customIconRepos:saveSettings',
+          method: 'post',
+          data: {
+            ...this.paginationConfig,
+            subCategories: this.subCategoriesConfig,
+          },
+        });
+      } catch (e) {
+        console.warn('Failed to save sub-categories settings to server:', e);
+      }
+    }
+    return this.getSubCategoriesConfig();
+  }
+
+  /**
+   * 重置分类规则配置为系统默认预设
+   */
+  public async resetSubCategoriesConfig(client?: any): Promise<Record<string, RawSubCategoryConfig[]>> {
+    const defaultPreset = (subCategoriesPreset as any) || {};
+    return this.saveSubCategoriesConfig(defaultPreset, client);
   }
 
   /**
@@ -861,8 +1037,9 @@ class CustomIconsManager {
         this.isLoaded = true;
         this.notify();
       }
-      // 异步同步最新分页配置
+      // 异步同步最新分页与分类规则配置
       void this.loadPaginationConfig(api);
+      void this.loadSubCategoriesConfig(api);
     } catch (err) {
       console.warn('Failed to load custom icons from server, using local cache:', err);
     }

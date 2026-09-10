@@ -25,6 +25,8 @@ import {
   AppstoreAddOutlined,
   UnorderedListOutlined,
   EditOutlined,
+  SyncOutlined,
+  CloudDownloadOutlined,
 } from '@ant-design/icons';
 import { customIconsManager, CustomIconItem } from '../services/custom-icons-manager';
 import { sanitizeAndFormatSvg, parseBatchSvgString } from '../utils/svg-helper';
@@ -57,6 +59,10 @@ export const CustomIconModal: React.FC<CustomIconModalProps> = ({
   // 批量导入状态
   const [batchItems, setBatchItems] = useState<Array<{ name: string; title: string; svg: string }>>([]);
   const [batchCategory, setBatchCategory] = useState('custom');
+
+  // Iconfont 合辑快速导入状态
+  const [iconfontUrlInput, setIconfontUrlInput] = useState('');
+  const [fetchingIconfont, setFetchingIconfont] = useState(false);
 
   // 图标列表管理状态
   const [allIcons, setAllIcons] = useState<CustomIconItem[]>([]);
@@ -185,6 +191,51 @@ export const CustomIconModal: React.FC<CustomIconModalProps> = ({
     }
   };
 
+  // 从 Iconfont 合辑直接一键拉取并批量导入
+  const handleFetchIconfontCollection = async () => {
+    if (!iconfontUrlInput.trim()) {
+      message.warning('请输入 Iconfont 合辑链接或合辑 ID（例如 54546）');
+      return;
+    }
+    setFetchingIconfont(true);
+    const hideMsg = message.loading('正在连接 Iconfont 平台获取矢量合辑数据...', 0);
+    try {
+      let res: any = null;
+      try {
+        res = await apiClient.request({
+          url: 'customIconRepos:importIconfont',
+          method: 'post',
+          data: {
+            input: iconfontUrlInput.trim(),
+            category: batchCategory.trim() || undefined,
+          },
+        });
+      } catch (e1) {
+        res = await apiClient.request({
+          url: 'custom_icon_repos:importIconfont',
+          method: 'post',
+          data: {
+            input: iconfontUrlInput.trim(),
+            category: batchCategory.trim() || undefined,
+          },
+        });
+      }
+      const result = res?.data?.data || res?.data || {};
+      message.success(
+        `恭喜！成功从 Iconfont 导入 [${result.title || '合辑'}]，共 ${result.total || 0} 款矢量图标！已自动分类至 [${result.category || batchCategory}]`,
+      );
+      await customIconsManager.loadIcons(apiClient);
+      refreshData();
+      setIconfontUrlInput('');
+      onClose();
+    } catch (err: any) {
+      message.error(err?.response?.data?.message || err?.message || '导入 Iconfont 合辑失败');
+    } finally {
+      hideMsg();
+      setFetchingIconfont(false);
+    }
+  };
+
 
   // 删除图标
   const handleDeleteIcon = async (record: CustomIconItem) => {
@@ -276,6 +327,16 @@ export const CustomIconModal: React.FC<CustomIconModalProps> = ({
                       style={{ width: isNewCategory ? 200 : 320 }}
                     >
                       <Select
+                        showSearch
+                        placeholder="搜索或选择分类"
+                        optionFilterProp="label"
+                        filterOption={(input, option) => {
+                          if (!input) return true;
+                          const lower = input.trim().toLowerCase();
+                          const labelStr = String(option?.label || '');
+                          const valueStr = String(option?.value || '');
+                          return labelStr.toLowerCase().includes(lower) || valueStr.toLowerCase().includes(lower);
+                        }}
                         options={[
                           ...categories.map((c) => ({ label: c === 'custom' ? '自定义 (默认)' : c, value: c })),
                           { label: '+ 新建分类...', value: '__new__' },
@@ -418,6 +479,30 @@ export const CustomIconModal: React.FC<CustomIconModalProps> = ({
                     <p className="ant-upload-hint">支持多选同时上传，文件名将自动识别为图标标识与中文名称</p>
                   </Upload.Dragger>
 
+                  <Divider orientation="left" style={{ margin: '8px 0', fontSize: 13, color: '#ff4400' }}>
+                    从阿里巴巴 Iconfont 平台合辑一键直接导入
+                  </Divider>
+
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <Input
+                      value={iconfontUrlInput}
+                      onChange={(e) => setIconfontUrlInput(e.target.value)}
+                      placeholder="粘贴 Iconfont 合辑链接，例如：https://www.iconfont.cn/collections/detail?cid=54546 或纯数字 54546"
+                      allowClear
+                      onPressEnter={handleFetchIconfontCollection}
+                      disabled={fetchingIconfont}
+                    />
+                    <Button
+                      type="primary"
+                      style={{ backgroundColor: '#ff4400', borderColor: '#ff4400' }}
+                      icon={fetchingIconfont ? <SyncOutlined spin /> : <CloudDownloadOutlined />}
+                      loading={fetchingIconfont}
+                      onClick={handleFetchIconfontCollection}
+                    >
+                      一键导入合辑
+                    </Button>
+                  </div>
+
                   <Divider orientation="left" style={{ margin: '8px 0', fontSize: 13 }}>
                     或者粘贴 Iconfont Symbol / 多个 SVG 代码
                   </Divider>
@@ -476,7 +561,17 @@ export const CustomIconModal: React.FC<CustomIconModalProps> = ({
                     <Select
                       value={filterCategory}
                       onChange={setFilterCategory}
-                      style={{ width: 140 }}
+                      style={{ width: 170 }}
+                      showSearch
+                      placeholder="搜索分类"
+                      optionFilterProp="label"
+                      filterOption={(input, option) => {
+                        if (!input) return true;
+                        const lower = input.trim().toLowerCase();
+                        const labelStr = String(option?.label || '');
+                        const valueStr = String(option?.value || '');
+                        return labelStr.toLowerCase().includes(lower) || valueStr.toLowerCase().includes(lower);
+                      }}
                       options={[
                         { label: '全部分类', value: 'all' },
                         ...categories.map((c) => ({ label: c, value: c })),
