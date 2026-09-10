@@ -971,16 +971,21 @@ export const createCustomIconReposResource = (app: any, resourceName = 'customIc
         const quotedSource = queryInterface.quoteIdentifier('source');
 
         const placeholders = sources.map(() => '?').join(',');
-        const sql = `DELETE FROM ${quotedTable} WHERE ${quotedCat} = ? OR ${quotedSource} IN (${placeholders})`;
-        const [results, metadata] = await sequelize.query(sql, {
+        const whereClause = `${quotedCat} = ? OR ${quotedSource} IN (${placeholders})`;
+
+        // 1. 先统计将被清理的图标总数（跨不同数据库方言 100% 精确）
+        const countSql = `SELECT count(*) as total FROM ${quotedTable} WHERE ${whereClause}`;
+        const [countRows]: any = await sequelize.query(countSql, {
           replacements: [targetCategory, ...sources],
         });
-        removedCount =
-          metadata && typeof metadata.changes === 'number'
-            ? metadata.changes
-            : typeof results === 'number'
-            ? results
-            : 0;
+        const matchedTotal = Number(countRows?.[0]?.total) || 0;
+
+        // 2. 执行删除
+        const deleteSql = `DELETE FROM ${quotedTable} WHERE ${whereClause}`;
+        await sequelize.query(deleteSql, {
+          replacements: [targetCategory, ...sources],
+        });
+        removedCount = matchedTotal;
       } catch (sqlErr: any) {
         console.warn('[plugin-custom-icons] 原生 SQL 批量删除失败，降级至分片安全删除:', sqlErr?.message);
         // Fallback：分批分片安全删除（每批 200 个，确保远低于 SQLite 1000 限制）
