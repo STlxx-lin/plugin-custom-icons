@@ -48,19 +48,19 @@ export class PluginCustomIconsServer extends Plugin {
       actions: ['custom_icons:*', 'customIcons:*', 'customIconRepos:*', 'custom_icon_repos:*'],
     });
 
-    // 4. 允许公开/访客及已登录用户读取图标、分类及仓库列表/探测（确保菜单、页面各处正常显示图标）
+    // 4. 允许公开/访客及已登录用户读取图标、分类及仓库列表/探测/分页配置（确保菜单、页面各处正常显示图标）
     this.app.acl.allow('customIcons', ['list', 'getCategories'], 'public');
     this.app.acl.allow('custom_icons', ['list', 'getCategories'], 'public');
     this.app.acl.allow('customIcons', ['list', 'getCategories'], 'loggedIn');
     this.app.acl.allow('custom_icons', ['list', 'getCategories'], 'loggedIn');
-    this.app.acl.allow('customIconRepos', ['list', 'probe'], 'public');
-    this.app.acl.allow('custom_icon_repos', ['list', 'probe'], 'public');
+    this.app.acl.allow('customIconRepos', ['list', 'probe', 'getSettings'], 'public');
+    this.app.acl.allow('custom_icon_repos', ['list', 'probe', 'getSettings'], 'public');
 
-    // 5. 管理权限接口（创建、更新、批量导入、删除、仓库安装与卸载、Iconify探测）
+    // 5. 管理权限接口（创建、更新、批量导入、删除、仓库安装与卸载、Iconify探测、分页面爬取、全局配置保存）
     this.app.acl.allow('custom_icons', ['create', 'update', 'batchCreate', 'destroy'], 'loggedIn');
     this.app.acl.allow('customIcons', ['create', 'update', 'batchCreate', 'destroy'], 'loggedIn');
-    this.app.acl.allow('customIconRepos', ['list', 'probe', 'install', 'uninstall'], 'loggedIn');
-    this.app.acl.allow('custom_icon_repos', ['list', 'probe', 'install', 'uninstall'], 'loggedIn');
+    this.app.acl.allow('customIconRepos', ['list', 'probe', 'install', 'uninstall', 'crawlPage', 'getSettings', 'saveSettings'], 'loggedIn');
+    this.app.acl.allow('custom_icon_repos', ['list', 'probe', 'install', 'uninstall', 'crawlPage', 'getSettings', 'saveSettings'], 'loggedIn');
   }
 }
 

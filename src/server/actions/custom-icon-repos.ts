@@ -392,6 +392,59 @@ function getStorageRepoDir(repoKey: string): string {
   return baseStorageDir;
 }
 
+function getSettingsFilePath(): string {
+  const dir = path.resolve(process.cwd(), 'storage', 'custom-icons');
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return path.join(dir, 'settings.json');
+}
+
+export interface IconPaginationSettings {
+  enablePagination: boolean;
+  threshold: number;
+  pageSize: number;
+}
+
+const DEFAULT_PAGINATION_SETTINGS: IconPaginationSettings = {
+  enablePagination: true,
+  threshold: 500,
+  pageSize: 200,
+};
+
+export function readPaginationSettings(): IconPaginationSettings {
+  try {
+    const filePath = getSettingsFilePath();
+    if (fs.existsSync(filePath)) {
+      const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      return {
+        enablePagination: data.enablePagination !== false,
+        threshold: typeof data.threshold === 'number' ? data.threshold : 500,
+        pageSize: typeof data.pageSize === 'number' ? data.pageSize : 200,
+      };
+    }
+  } catch (e) {
+    console.warn('[plugin-custom-icons] 读取 settings.json 失败:', e);
+  }
+  return { ...DEFAULT_PAGINATION_SETTINGS };
+}
+
+export function writePaginationSettings(settings: Partial<IconPaginationSettings>): IconPaginationSettings {
+  const current = readPaginationSettings();
+  const next: IconPaginationSettings = {
+    enablePagination: settings.enablePagination !== undefined ? Boolean(settings.enablePagination) : current.enablePagination,
+    threshold: typeof settings.threshold === 'number' ? Math.max(0, settings.threshold) : current.threshold,
+    pageSize: typeof settings.pageSize === 'number' ? Math.max(10, settings.pageSize) : current.pageSize,
+  };
+  try {
+    const filePath = getSettingsFilePath();
+    fs.writeFileSync(filePath, JSON.stringify(next, null, 2), 'utf8');
+  } catch (e) {
+    console.warn('[plugin-custom-icons] 写入 settings.json 失败:', e);
+  }
+  return next;
+}
+
 export const createCustomIconReposResource = (app: any, resourceName = 'customIconRepos') => ({
   name: resourceName,
   actions: {
@@ -904,6 +957,25 @@ export const createCustomIconReposResource = (app: any, resourceName = 'customIc
       };
       await next();
     },
+
+    /**
+     * 获取全局配置（包括分页设置）
+     */
+    async getSettings(ctx: any, next: any) {
+      ctx.body = readPaginationSettings();
+      await next();
+    },
+
+    /**
+     * 保存全局配置
+     */
+    async saveSettings(ctx: any, next: any) {
+      const values = ctx.action.params?.values || ctx.request.body || {};
+      const updated = writePaginationSettings(values);
+      ctx.body = updated;
+      await next();
+    },
   },
 });
+
 

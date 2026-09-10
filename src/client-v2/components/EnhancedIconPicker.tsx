@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   CloseOutlined,
   LoadingOutlined,
@@ -24,6 +24,7 @@ import {
   Tooltip,
   Popconfirm,
   Badge,
+  Pagination,
 } from 'antd';
 import { debounce, groupBy } from 'lodash';
 import { useTranslation } from 'react-i18next';
@@ -36,6 +37,7 @@ import {
   PRESET_ICON_COLORS,
   PRESET_ICON_SIZES,
 } from '../utils/icon-style-helper';
+import subCategoriesData from '../config/sub-categories.json';
 
 const { Search } = Input;
 
@@ -122,108 +124,45 @@ export interface SubCategoryDef {
   filter: (name: string, item?: any) => boolean;
 }
 
-export const CAOMEI_SUB_CATEGORIES: SubCategoryDef[] = [
-  { key: 'all', label: '全部', filter: () => true },
-  { key: 'line', label: '线框风格', filter: (n) => n.endsWith('-l') },
-  { key: 'solid', label: '实底风格', filter: (n) => !n.endsWith('-l') },
-  {
-    key: 'office',
-    label: '常用办公',
-    filter: (n) => /doc|file|folder|book|paper|clip|calendar|clipboard|pen|edit|save|read|certificate|ruler|scissors|printer/i.test(n),
-  },
-  {
-    key: 'devices',
-    label: '电子设备',
-    filter: (n) => /computer|laptop|mobile|pad|phone|tv|watch|router|server|mouse|keyboard|hdmi|usb|battery|disk|storage|sdcard|webcam|microchip/i.test(n),
-  },
-  {
-    key: 'arrows',
-    label: '方向交互',
-    filter: (n) => /angle|arrow|bevel|camber|hand-slide|down|up|left|right|turn|expand|shrink|hand-/i.test(n),
-  },
-  {
-    key: 'media',
-    label: '媒体影音',
-    filter: (n) => /camera|film|image|music|video|voice|volume|microphone|sound|play|pause|headset/i.test(n),
-  },
-  {
-    key: 'finance',
-    label: '商业金融',
-    filter: (n) => /buy|shopping|coin|money|bitcoin|credit|pay|red-envelope|alipay|shop|ticket|diamond|crown/i.test(n),
-  },
-  {
-    key: 'brands',
-    label: '网络品牌',
-    filter: (n) => /alipay|bilibili|baidu|chrome|github|apple|android|google|microsoft|linux|qq|weibo|weixin|zhihu|youtube|twitter|facebook|vimeo|v2ex|steam|paypal/i.test(n),
-  },
-];
+export interface RawSubCategoryConfig {
+  key: string;
+  label: string;
+  matchType?: 'regex' | 'endsWith' | 'notEndsWith' | 'all';
+  pattern?: string;
+}
 
-export const BUILTIN_SUB_CATEGORIES: SubCategoryDef[] = [
-  { key: 'all', label: '全部', filter: () => true },
-  { key: 'direction', label: '方向指示', filter: (n) => /up|down|left|right|arrow|chevron|caret|double/i.test(n) },
-  { key: 'suggested', label: '提示建议', filter: (n) => /check|close|info|exclamation|question|warning|stop|clock/i.test(n) },
-  { key: 'editor', label: '编辑通用', filter: (n) => /edit|copy|delete|form|file|folder|save|setting|search|scissor|link/i.test(n) },
-  { key: 'data', label: '数据图表', filter: (n) => /chart|pie|bar|line|stock|dot|dashboard|database/i.test(n) },
-  { key: 'brand', label: '品牌商标', filter: (n) => /alipay|wechat|github|google|apple|android|windows|ie|chrome/i.test(n) },
-];
+export function parseSubCategories(rawList: RawSubCategoryConfig[] = []): SubCategoryDef[] {
+  return (rawList || []).map((item) => {
+    if (!item.matchType || item.matchType === 'all' || !item.pattern) {
+      return { key: item.key, label: item.label, filter: () => true };
+    }
+    if (item.matchType === 'endsWith') {
+      const p = item.pattern;
+      return { key: item.key, label: item.label, filter: (n: string) => n.endsWith(p) };
+    }
+    if (item.matchType === 'notEndsWith') {
+      const p = item.pattern;
+      return { key: item.key, label: item.label, filter: (n: string) => !n.endsWith(p) };
+    }
+    if (item.matchType === 'regex') {
+      const reg = new RegExp(item.pattern, 'i');
+      return { key: item.key, label: item.label, filter: (n: string) => reg.test(n) };
+    }
+    return { key: item.key, label: item.label, filter: () => true };
+  });
+}
 
-export const UNIVERSAL_ICONIFY_SUB_CATEGORIES: SubCategoryDef[] = [
-  { key: 'all', label: '全部', filter: () => true },
-  {
-    key: 'arrows',
-    label: '方向箭头',
-    filter: (n) =>
-      /arrow|chevron|caret|angle|direction|up|down|left|right|forward|back|corner|expand|shrink|collapse|move|rotate|undo|redo|sort/i.test(n),
-  },
-  {
-    key: 'interface',
-    label: '通用界面',
-    filter: (n) =>
-      /home|setting|cog|gear|search|filter|menu|more|list|grid|check|cross|close|x$|plus|add|minus|info|help|alert|warn|bell|lock|unlock|key|eye|shield|user|profile|log/i.test(n),
-  },
-  {
-    key: 'office',
-    label: '办公文档',
-    filter: (n) =>
-      /file|folder|doc|edit|pencil|pen|paper|clipboard|calendar|date|time|clock|book|bookmark|save|trash|delete|copy|cut|paste|tag|flag/i.test(n),
-  },
-  {
-    key: 'devices',
-    label: '硬件设备',
-    filter: (n) =>
-      /computer|laptop|pc|mobile|phone|smartphone|tablet|screen|monitor|tv|display|watch|camera|battery|hard-drive|server|database|cpu|chip|usb|wifi|bluetooth|printer|mouse|keyboard/i.test(n),
-  },
-  {
-    key: 'media',
-    label: '多媒体',
-    filter: (n) =>
-      /music|audio|sound|volume|mic|microphone|video|movie|film|play|pause|stop|record|disc|album|radio|image|photo|picture/i.test(n),
-  },
-  {
-    key: 'finance',
-    label: '商业金融',
-    filter: (n) =>
-      /shopping|cart|bag|credit|card|wallet|dollar|money|cash|coin|currency|bank|shop|store|percent|percentage|chart|graph|trending|receipt|invoice/i.test(n),
-  },
-  {
-    key: 'communication',
-    label: '通讯社交',
-    filter: (n) =>
-      /mail|email|envelope|message|chat|comment|send|share|phone-call|at-sign|rss|link|globe|network|share-2|heart|star|thumbs/i.test(n),
-  },
-  {
-    key: 'weather',
-    label: '自然天气',
-    filter: (n) =>
-      /sun|moon|cloud|rain|snow|wind|lightning|thermometer|umbrella|drop|flame|fire|leaf|flower|tree|globe|earth|map|pin|navigation|compass/i.test(n),
-  },
-  {
-    key: 'brand',
-    label: '知名品牌',
-    filter: (n) =>
-      /github|google|apple|android|windows|chrome|alipay|wechat|twitter|facebook|youtube|slack|figma|docker|npm|git|react|vue/i.test(n),
-  },
-];
+export const CAOMEI_SUB_CATEGORIES: SubCategoryDef[] = parseSubCategories(
+  (subCategoriesData as any)?.caomei,
+);
+
+export const BUILTIN_SUB_CATEGORIES: SubCategoryDef[] = parseSubCategories(
+  (subCategoriesData as any)?.builtin,
+);
+
+export const UNIVERSAL_ICONIFY_SUB_CATEGORIES: SubCategoryDef[] = parseSubCategories(
+  (subCategoriesData as any)?.universal,
+);
 
 function EnhancedIconField(props: IconPickerProps) {
   const { fontSizeXL } = theme.useToken().token;
@@ -244,12 +183,28 @@ function EnhancedIconField(props: IconPickerProps) {
   const [searchVal, setSearchVal] = useState('');
   const [activeTab, setActiveTab] = useState('Outlined');
   const [activeSubCat, setActiveSubCat] = useState('all');
+  const [currentPage, setCurrentPage] = useState<number>(1);
   const [, setTick] = useState(0);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // 当切换大分类时，重置子分类为 'all'
+  // 动态读取全局分页配置（支持设置中心动态调整即时生效）
+  const paginationConfig = customIconsManager.getPaginationConfig();
+  const { enablePagination = true, threshold = 500, pageSize = 200 } = paginationConfig;
+
+  // 当切换大分类或子分类或搜索时，重置分页为第 1 页
   useEffect(() => {
     setActiveSubCat('all');
+    setCurrentPage(1);
   }, [activeTab]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeSubCat, searchVal]);
+
+  // 翻页时网格容器自动平滑置顶
+  useEffect(() => {
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [currentPage]);
 
   // 内部状态同步以保证零延迟即时视觉反馈
   const [internalValue, setInternalValue] = useState<string | null | undefined>(value);
@@ -440,7 +395,7 @@ function EnhancedIconField(props: IconPickerProps) {
     }
   };
 
-  // 渲染图标网格内容
+  // 渲染图标网格内容（超过 500 款自动启用分页）
   const renderContent = () => {
     // 搜索有关键词时的综合展示
     if (searchVal.trim()) {
@@ -451,65 +406,101 @@ function EnhancedIconField(props: IconPickerProps) {
         return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到匹配的图标" />;
       }
 
-      return (
-        <Flex vertical gap="middle">
-          {matchCustom.length > 0 && (
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#1677ff', marginBottom: 6 }}>
-                自定义与外部图标库 ({matchCustom.length})
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {matchCustom.map((item) => (
-                  <Tooltip key={item.name} title={`${item.title || item.name} (${item.name})`}>
-                    <span
-                      style={{
-                        fontSize: iconSize,
-                        padding: '4px 6px',
-                        cursor: 'pointer',
-                        borderRadius: 4,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: currentBaseName === item.name ? '#e6f4ff' : 'transparent',
-                        border: currentBaseName === item.name ? '1px solid #1677ff' : '1px solid transparent',
-                      }}
-                      onClick={() => handleSelectIcon(item.name)}
-                    >
-                      <Icon type={item.name} />
-                    </span>
-                  </Tooltip>
-                ))}
-              </div>
-            </div>
-          )}
+      const totalCustom = matchCustom.length;
+      const needCustomPaging = enablePagination && (threshold === 0 || totalCustom > threshold);
+      const displayCustom = needCustomPaging
+        ? matchCustom.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+        : matchCustom;
 
-          {matchBuiltIn.length > 0 && (
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#8c8c8c', marginBottom: 6 }}>
-                系统内置图标 ({matchBuiltIn.length})
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {matchBuiltIn.slice(0, 150).map((key) => (
-                  <span
-                    key={key}
-                    title={key.replace(/outlined|filled|twotone$/i, '')}
-                    style={{
-                      fontSize: iconSize,
-                      padding: '4px 6px',
-                      cursor: 'pointer',
-                      borderRadius: 4,
-                      display: 'inline-flex',
-                      backgroundColor: currentBaseName === key ? '#e6f4ff' : 'transparent',
-                    }}
-                    onClick={() => handleSelectIcon(key)}
-                  >
-                    <Icon type={key} />
-                  </span>
-                ))}
-              </div>
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', paddingRight: 4 }}>
+            <Flex vertical gap="middle">
+              {matchCustom.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#1677ff', marginBottom: 6 }}>
+                    自定义与外部图标库 ({matchCustom.length})
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {displayCustom.map((item) => (
+                      <Tooltip key={item.name} title={`${item.title || item.name} (${item.name})`}>
+                        <span
+                          style={{
+                            fontSize: iconSize,
+                            padding: '4px 6px',
+                            cursor: 'pointer',
+                            borderRadius: 4,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: currentBaseName === item.name ? '#e6f4ff' : 'transparent',
+                            border: currentBaseName === item.name ? '1px solid #1677ff' : '1px solid transparent',
+                          }}
+                          onClick={() => handleSelectIcon(item.name)}
+                        >
+                          <Icon type={item.name} />
+                        </span>
+                      </Tooltip>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {matchBuiltIn.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#8c8c8c', marginBottom: 6 }}>
+                    系统内置图标 ({matchBuiltIn.length})
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {matchBuiltIn.slice(0, 150).map((key) => (
+                      <span
+                        key={key}
+                        title={key.replace(/outlined|filled|twotone$/i, '')}
+                        style={{
+                          fontSize: iconSize,
+                          padding: '4px 6px',
+                          cursor: 'pointer',
+                          borderRadius: 4,
+                          display: 'inline-flex',
+                          backgroundColor: currentBaseName === key ? '#e6f4ff' : 'transparent',
+                        }}
+                        onClick={() => handleSelectIcon(key)}
+                      >
+                        <Icon type={key} />
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Flex>
+          </div>
+
+          {needCustomPaging && (
+            <div
+              style={{
+                flexShrink: 0,
+                padding: '6px 4px 2px',
+                borderTop: '1px solid #f0f0f0',
+                backgroundColor: '#fafafa',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <span style={{ fontSize: 11, color: '#8c8c8c' }}>
+                共 {totalCustom} 款 · 每页 {pageSize} 款
+              </span>
+              <Pagination
+                size="small"
+                simple
+                current={currentPage}
+                pageSize={pageSize}
+                total={totalCustom}
+                onChange={(p) => setCurrentPage(p)}
+              />
             </div>
           )}
-        </Flex>
+        </div>
       );
     }
 
@@ -551,29 +542,65 @@ function EnhancedIconField(props: IconPickerProps) {
         );
       }
 
+      const totalCount = iconsInCat.length;
+      const needPagination = enablePagination && (threshold === 0 || totalCount > threshold);
+      const displayIcons = needPagination
+        ? iconsInCat.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+        : iconsInCat;
+
       return (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {iconsInCat.map((item) => (
-            <Tooltip key={item.name} title={`${item.title || item.name} (${item.name})`}>
-              <span
-                style={{
-                  fontSize: iconSize,
-                  padding: '4px 6px',
-                  cursor: 'pointer',
-                  borderRadius: 4,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: currentBaseName === item.name ? '#e6f4ff' : 'transparent',
-                  border: currentBaseName === item.name ? '1px solid #1677ff' : '1px solid transparent',
-                  position: 'relative',
-                }}
-                onClick={() => handleSelectIcon(item.name)}
-              >
-                <Icon type={item.name} />
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', paddingRight: 4 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {displayIcons.map((item) => (
+                <Tooltip key={item.name} title={`${item.title || item.name} (${item.name})`}>
+                  <span
+                    style={{
+                      fontSize: iconSize,
+                      padding: '4px 6px',
+                      cursor: 'pointer',
+                      borderRadius: 4,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: currentBaseName === item.name ? '#e6f4ff' : 'transparent',
+                      border: currentBaseName === item.name ? '1px solid #1677ff' : '1px solid transparent',
+                      position: 'relative',
+                    }}
+                    onClick={() => handleSelectIcon(item.name)}
+                  >
+                    <Icon type={item.name} />
+                  </span>
+                </Tooltip>
+              ))}
+            </div>
+          </div>
+
+          {needPagination && (
+            <div
+              style={{
+                flexShrink: 0,
+                padding: '6px 4px 2px',
+                borderTop: '1px solid #f0f0f0',
+                backgroundColor: '#fafafa',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <span style={{ fontSize: 11, color: '#8c8c8c' }}>
+                共 {totalCount} 款 · 每页 {pageSize} 款
               </span>
-            </Tooltip>
-          ))}
+              <Pagination
+                size="small"
+                simple
+                current={currentPage}
+                pageSize={pageSize}
+                total={totalCount}
+                onChange={(p) => setCurrentPage(p)}
+              />
+            </div>
+          )}
         </div>
       );
     }
@@ -600,32 +627,68 @@ function EnhancedIconField(props: IconPickerProps) {
       );
     }
 
+    const totalBuiltIn = currentList.length;
+    const needBuiltInPaging = enablePagination && (threshold === 0 || totalBuiltIn > threshold);
+    const displayBuiltIn = needBuiltInPaging
+      ? currentList.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+      : currentList;
+
     return (
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {currentList.map((key) => (
-          <span
-            key={key}
-            title={key.replace(/outlined|filled|twotone$/i, '')}
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', paddingRight: 4 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {displayBuiltIn.map((key) => (
+              <span
+                key={key}
+                title={key.replace(/outlined|filled|twotone$/i, '')}
+                style={{
+                  fontSize: iconSize,
+                  padding: '4px 6px',
+                  cursor: 'pointer',
+                  borderRadius: 4,
+                  display: 'inline-flex',
+                  backgroundColor: currentBaseName === key ? '#e6f4ff' : 'transparent',
+                }}
+                onClick={() => handleSelectIcon(key)}
+              >
+                <Icon type={key} />
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {needBuiltInPaging && (
+          <div
             style={{
-              fontSize: iconSize,
-              padding: '4px 6px',
-              cursor: 'pointer',
-              borderRadius: 4,
-              display: 'inline-flex',
-              backgroundColor: currentBaseName === key ? '#e6f4ff' : 'transparent',
+              flexShrink: 0,
+              padding: '6px 4px 2px',
+              borderTop: '1px solid #f0f0f0',
+              backgroundColor: '#fafafa',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
             }}
-            onClick={() => handleSelectIcon(key)}
           >
-            <Icon type={key} />
-          </span>
-        ))}
+            <span style={{ fontSize: 11, color: '#8c8c8c' }}>
+              共 {totalBuiltIn} 款 · 每页 {pageSize} 款
+            </span>
+            <Pagination
+              size="small"
+              simple
+              current={currentPage}
+              pageSize={pageSize}
+              total={totalBuiltIn}
+              onChange={(p) => setCurrentPage(p)}
+            />
+          </div>
+        )}
       </div>
     );
   };
 
   const showSubSidebar = currentSubCategories.length > 1 && !searchVal.trim();
   const containerStyle: React.CSSProperties = {
-    width: showSubSidebar ? '33em' : '28em',
+    width: showSubSidebar ? '35em' : '28em',
     height: '22em',
     display: 'flex',
     overflow: 'hidden',
@@ -683,12 +746,12 @@ function EnhancedIconField(props: IconPickerProps) {
           }
           content={
             <div style={containerStyle}>
-              {/* 左侧：图标网格展示与独立纵向滚动 */}
+              {/* 左侧：图标网格展示与独立纵向滚动（支持底部吸底分页） */}
               <div
                 style={{
                   flex: 1,
                   height: '100%',
-                  overflowY: 'auto',
+                  overflow: 'hidden',
                   padding: '4px 6px 4px 0',
                 }}
               >

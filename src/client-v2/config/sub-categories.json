@@ -1,0 +1,133 @@
+{
+  "caomei": [
+    { "key": "all", "label": "全部" },
+    { "key": "line", "label": "线框风格", "matchType": "endsWith", "pattern": "-l" },
+    { "key": "solid", "label": "实底风格", "matchType": "notEndsWith", "pattern": "-l" },
+    {
+      "key": "office",
+      "label": "常用办公",
+      "matchType": "regex",
+      "pattern": "doc|file|folder|book|paper|clip|calendar|clipboard|pen|edit|save|read|certificate|ruler|scissors|printer"
+    },
+    {
+      "key": "devices",
+      "label": "电子设备",
+      "matchType": "regex",
+      "pattern": "computer|laptop|mobile|pad|phone|tv|watch|router|server|mouse|keyboard|hdmi|usb|battery|disk|storage|sdcard|webcam|microchip"
+    },
+    {
+      "key": "arrows",
+      "label": "方向交互",
+      "matchType": "regex",
+      "pattern": "angle|arrow|bevel|camber|hand-slide|down|up|left|right|turn|expand|shrink|hand-"
+    },
+    {
+      "key": "media",
+      "label": "媒体影音",
+      "matchType": "regex",
+      "pattern": "camera|film|image|music|video|voice|volume|microphone|sound|play|pause|headset"
+    },
+    {
+      "key": "finance",
+      "label": "商业金融",
+      "matchType": "regex",
+      "pattern": "buy|shopping|coin|money|bitcoin|credit|pay|red-envelope|alipay|shop|ticket|diamond|crown"
+    },
+    {
+      "key": "brands",
+      "label": "网络品牌",
+      "matchType": "regex",
+      "pattern": "alipay|bilibili|baidu|chrome|github|apple|android|google|microsoft|linux|qq|weibo|weixin|zhihu|youtube|twitter|facebook|vimeo|v2ex|steam|paypal"
+    }
+  ],
+  "builtin": [
+    { "key": "all", "label": "全部" },
+    {
+      "key": "direction",
+      "label": "方向指示",
+      "matchType": "regex",
+      "pattern": "up|down|left|right|arrow|chevron|caret|double"
+    },
+    {
+      "key": "suggested",
+      "label": "提示建议",
+      "matchType": "regex",
+      "pattern": "check|close|info|exclamation|question|warning|stop|clock"
+    },
+    {
+      "key": "editor",
+      "label": "编辑通用",
+      "matchType": "regex",
+      "pattern": "edit|copy|delete|form|file|folder|save|setting|search|scissor|link"
+    },
+    {
+      "key": "data",
+      "label": "数据图表",
+      "matchType": "regex",
+      "pattern": "chart|pie|bar|line|stock|dot|dashboard|database"
+    },
+    {
+      "key": "brand",
+      "label": "品牌商标",
+      "matchType": "regex",
+      "pattern": "alipay|wechat|github|google|apple|android|windows|ie|chrome"
+    }
+  ],
+  "universal": [
+    { "key": "all", "label": "全部" },
+    {
+      "key": "arrows",
+      "label": "方向箭头",
+      "matchType": "regex",
+      "pattern": "arrow|chevron|caret|angle|direction|up|down|left|right|forward|back|corner|expand|shrink|collapse|move|rotate|undo|redo|sort"
+    },
+    {
+      "key": "interface",
+      "label": "通用界面",
+      "matchType": "regex",
+      "pattern": "home|setting|cog|gear|search|filter|menu|more|list|grid|check|cross|close|x$|plus|add|minus|info|help|alert|warn|bell|lock|unlock|key|eye|shield|user|profile|log"
+    },
+    {
+      "key": "office",
+      "label": "办公文档",
+      "matchType": "regex",
+      "pattern": "file|folder|doc|edit|pencil|pen|paper|clipboard|calendar|date|time|clock|book|bookmark|save|trash|delete|copy|cut|paste|tag|flag"
+    },
+    {
+      "key": "devices",
+      "label": "硬件设备",
+      "matchType": "regex",
+      "pattern": "computer|laptop|pc|mobile|phone|smartphone|tablet|screen|monitor|tv|display|watch|camera|battery|hard-drive|server|database|cpu|chip|usb|wifi|bluetooth|printer|mouse|keyboard"
+    },
+    {
+      "key": "media",
+      "label": "多媒体",
+      "matchType": "regex",
+      "pattern": "music|audio|sound|volume|mic|microphone|video|movie|film|play|pause|stop|record|disc|album|radio|image|photo|picture"
+    },
+    {
+      "key": "finance",
+      "label": "商业金融",
+      "matchType": "regex",
+      "pattern": "shopping|cart|bag|credit|card|wallet|dollar|money|cash|coin|currency|bank|shop|store|percent|percentage|chart|graph|trending|receipt|invoice"
+    },
+    {
+      "key": "communication",
+      "label": "通讯社交",
+      "matchType": "regex",
+      "pattern": "mail|email|envelope|message|chat|comment|send|share|phone-call|at-sign|rss|link|globe|network|share-2|heart|star|thumbs"
+    },
+    {
+      "key": "weather",
+      "label": "自然天气",
+      "matchType": "regex",
+      "pattern": "sun|moon|cloud|rain|snow|wind|lightning|thermometer|umbrella|drop|flame|fire|leaf|flower|tree|globe|earth|map|pin|navigation|compass"
+    },
+    {
+      "key": "brand",
+      "label": "知名品牌",
+      "matchType": "regex",
+      "pattern": "github|google|apple|android|windows|chrome|alipay|wechat|twitter|facebook|youtube|slack|figma|docker|npm|git|react|vue"
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Space, Table, Typography, Tag, Popconfirm, message, Input, Select, Tabs } from 'antd';
+import { Card, Button, Space, Table, Typography, Tag, Popconfirm, message, Input, Select, Tabs, Switch, InputNumber, Alert, Divider } from 'antd';
 import {
   PlusOutlined,
   DeleteOutlined,
@@ -8,12 +8,22 @@ import {
   EditOutlined,
   AppstoreOutlined,
   ShoppingOutlined,
+  SettingOutlined,
+  CheckOutlined,
+  UndoOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
-import { customIconsManager, CustomIconItem } from '../services/custom-icons-manager';
+import {
+  customIconsManager,
+  CustomIconItem,
+  IconPaginationConfig,
+  DEFAULT_PAGINATION_CONFIG,
+} from '../services/custom-icons-manager';
 import { sanitizeAndFormatSvg } from '../utils/svg-helper';
 import { CustomIconModal } from '../components/CustomIconModal';
 import { EditIconModal } from '../components/EditIconModal';
 import { IconRepoMarket } from '../components/IconRepoMarket';
+import { EnhancedIconPicker } from '../components/EnhancedIconPicker';
 
 const { Title, Text } = Typography;
 
@@ -27,6 +37,10 @@ export const CustomIconsSettingsPage: React.FC<{ api: any }> = ({ api }) => {
   const [filterCat, setFilterCat] = useState('all');
   const [searchText, setSearchText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [paginationSettings, setPaginationSettings] = useState<IconPaginationConfig>(
+    customIconsManager.getPaginationConfig(),
+  );
+  const [savingSettings, setSavingSettings] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -34,6 +48,8 @@ export const CustomIconsSettingsPage: React.FC<{ api: any }> = ({ api }) => {
       await customIconsManager.loadIcons(api);
       setIcons(customIconsManager.getAllIcons());
       setCategories(customIconsManager.getCategories());
+      const cfg = await customIconsManager.loadPaginationConfig(api);
+      if (cfg) setPaginationSettings(cfg);
     } finally {
       setLoading(false);
     }
@@ -44,9 +60,27 @@ export const CustomIconsSettingsPage: React.FC<{ api: any }> = ({ api }) => {
     const unsub = customIconsManager.subscribe(() => {
       setIcons(customIconsManager.getAllIcons());
       setCategories(customIconsManager.getCategories());
+      setPaginationSettings(customIconsManager.getPaginationConfig());
     });
     return unsub;
   }, []);
+
+  const handleSavePaginationSettings = async () => {
+    setSavingSettings(true);
+    try {
+      await customIconsManager.savePaginationConfig(paginationSettings, api);
+      message.success('分页与性能配置已成功保存，全站图标选择器已即时生效！');
+    } catch (e: any) {
+      message.error('保存失败: ' + (e?.message || '未知错误'));
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const handleResetPaginationSettings = () => {
+    setPaginationSettings({ ...DEFAULT_PAGINATION_CONFIG });
+    message.info('已重置为系统推荐默认值（开启分页、阈值 500、每页 200），请点击「保存配置」完成持久化。');
+  };
 
   const handleDelete = async (record: CustomIconItem) => {
     try {
@@ -231,6 +265,139 @@ export const CustomIconsSettingsPage: React.FC<{ api: any }> = ({ api }) => {
                 </span>
               ),
               children: <IconRepoMarket apiClient={api} onRepoChanged={() => loadData()} />,
+            },
+            {
+              key: 'paginationSettings',
+              label: (
+                <span>
+                  <SettingOutlined /> 分页与性能配置
+                </span>
+              ),
+              children: (
+                <div style={{ paddingTop: 12, maxWidth: 860 }}>
+                  <Alert
+                    type="info"
+                    showIcon
+                    icon={<ThunderboltOutlined style={{ color: '#1677ff' }} />}
+                    message="图标选择器（IconPicker）智能分页保护"
+                    description="当接入海量图标库（如 Iconmonstr 包含 2500+ 款图标，或全部分类/搜索匹配量极大）时，一次性挂载数千个 SVG DOM 元素会导致浏览器主线程阻塞与渲染卡顿。通过开启分页保护，选择器将自动切片秒开，大幅提升系统交互流畅度与内存健康度。"
+                    style={{ marginBottom: 20 }}
+                  />
+
+                  <Card title="核心配置项" size="small" style={{ marginBottom: 20 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: '8px 4px' }}>
+                      {/* 1. 开启分页开关 */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 14 }}>开启选择器智能分页保护</div>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            推荐开启。当分类或搜索结果中的图标数量较多时，自动在选择器底部呈现紧凑翻页器。
+                          </Text>
+                        </div>
+                        <Switch
+                          checked={paginationSettings.enablePagination}
+                          onChange={(checked) =>
+                            setPaginationSettings((prev) => ({ ...prev, enablePagination: checked }))
+                          }
+                        />
+                      </div>
+
+                      <Divider style={{ margin: '4px 0' }} />
+
+                      {/* 2. 分页触发阈值 */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 14 }}>分页触发阈值 (Threshold)</div>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            当某分类或搜索匹配的图标总数<strong>超过此数量</strong>时自动启用分页展示。设置为 0 则无条件总是分页。
+                          </Text>
+                        </div>
+                        <Space>
+                          <InputNumber
+                            min={0}
+                            max={10000}
+                            step={50}
+                            disabled={!paginationSettings.enablePagination}
+                            value={paginationSettings.threshold}
+                            onChange={(val) =>
+                              setPaginationSettings((prev) => ({ ...prev, threshold: Number(val) || 0 }))
+                            }
+                            style={{ width: 140 }}
+                            addonAfter="款"
+                          />
+                        </Space>
+                      </div>
+
+                      <Divider style={{ margin: '4px 0' }} />
+
+                      {/* 3. 每页展示数量 */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 14 }}>每页显示数量 (Page Size)</div>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            触发分页后，每页切片渲染的图标数量。推荐设置为 100 ~ 200 款，以平衡浏览视野与 DOM 性能。
+                          </Text>
+                        </div>
+                        <Select
+                          disabled={!paginationSettings.enablePagination}
+                          value={paginationSettings.pageSize}
+                          onChange={(val) => setPaginationSettings((prev) => ({ ...prev, pageSize: val }))}
+                          style={{ width: 140 }}
+                          options={[
+                            { label: '50 款 / 页', value: 50 },
+                            { label: '100 款 / 页', value: 100 },
+                            { label: '200 款 / 页 (推荐)', value: 200 },
+                            { label: '300 款 / 页', value: 300 },
+                            { label: '500 款 / 页', value: 500 },
+                          ]}
+                        />
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: 24,
+                        paddingTop: 16,
+                        borderTop: '1px solid #f0f0f0',
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        gap: 12,
+                      }}
+                    >
+                      <Button icon={<UndoOutlined />} onClick={handleResetPaginationSettings}>
+                        恢复推荐默认
+                      </Button>
+                      <Button
+                        type="primary"
+                        icon={<CheckOutlined />}
+                        loading={savingSettings}
+                        onClick={handleSavePaginationSettings}
+                      >
+                        保存配置并立即生效
+                      </Button>
+                    </div>
+                  </Card>
+
+                  {/* 实时效果演练区 */}
+                  <Card
+                    size="small"
+                    title={
+                      <span style={{ fontSize: 13, color: '#595959' }}>
+                        💡 现场实时演练与效果验证（无需离开本页即可体验）
+                      </span>
+                    }
+                    style={{ backgroundColor: '#fafafa' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '8px 4px' }}>
+                      <span style={{ fontSize: 13, color: '#595959' }}>点击右侧测试选择器：</span>
+                      <EnhancedIconPicker apiClient={api} />
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        （在上方修改阈值或每页条数并保存后，直接点击此处打开，即可现场检验分页效果）
+                      </Text>
+                    </div>
+                  </Card>
+                </div>
+              ),
             },
           ]}
         />

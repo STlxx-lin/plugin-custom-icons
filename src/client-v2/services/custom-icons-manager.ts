@@ -16,8 +16,21 @@ export interface CustomIconItem {
 
 type Listener = () => void;
 
+export interface IconPaginationConfig {
+  enablePagination: boolean;
+  threshold: number;
+  pageSize: number;
+}
+
+export const DEFAULT_PAGINATION_CONFIG: IconPaginationConfig = {
+  enablePagination: true,
+  threshold: 500,
+  pageSize: 200,
+};
+
 const CACHE_KEY = 'NOCOBASE_CUSTOM_ICONS_CACHE_V2';
 const STYLED_CACHE_KEY = 'NOCOBASE_STYLED_ICONS_CACHE_V2';
+const PAGINATION_CONFIG_KEY = 'NOCOBASE_ICON_PAGINATION_CONFIG_V2';
 
 /**
  * Ant Design 官方全量图标组件映射字典（大小写不敏感索引，确保首屏及任意时刻 100% 命中）
@@ -181,6 +194,7 @@ class CustomIconsManager {
   private app: any = null;
   private hostIconComponent: any = null;
   private registeredComponents: Map<string, any> = new Map();
+  private paginationConfig: IconPaginationConfig = { ...DEFAULT_PAGINATION_CONFIG };
 
   private constructor() {
     // 1. 立即挂载本地 icons Map 的代理拦截器
@@ -197,7 +211,10 @@ class CustomIconsManager {
     // 4. 同步从 localStorage 恢复已使用过的带样式复合图标，首屏 0 毫秒就绪
     this.restoreStyledIconsFromCache();
 
-    // 5. 启动后台主应用宿主 Icon 探测器
+    // 5. 从 localStorage 恢复分页配置
+    this.restorePaginationConfigFromCache();
+
+    // 6. 启动后台主应用宿主 Icon 探测器
     this.scheduleHostIconDetection();
   }
 
@@ -318,6 +335,93 @@ class CustomIconsManager {
     } catch (e) {
       // ignore
     }
+  }
+
+  /**
+   * 从 localStorage 恢复分页配置
+   */
+  private restorePaginationConfigFromCache() {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    try {
+      const raw = window.localStorage.getItem(PAGINATION_CONFIG_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        this.paginationConfig = {
+          enablePagination: parsed.enablePagination !== false,
+          threshold: typeof parsed.threshold === 'number' ? parsed.threshold : 500,
+          pageSize: typeof parsed.pageSize === 'number' ? parsed.pageSize : 200,
+        };
+      }
+    } catch (e) {}
+  }
+
+  /**
+   * 获取当前分页配置
+   */
+  public getPaginationConfig(): IconPaginationConfig {
+    return { ...this.paginationConfig };
+  }
+
+  /**
+   * 从服务端拉取最新分页配置
+   */
+  public async loadPaginationConfig(client?: any): Promise<IconPaginationConfig> {
+    const api = client || this.apiClient;
+    if (!api) return this.paginationConfig;
+    try {
+      const res = await api.request({
+        url: 'customIconRepos:getSettings',
+      });
+      const data = res?.data?.data || res?.data;
+      if (data && typeof data === 'object') {
+        this.paginationConfig = {
+          enablePagination: data.enablePagination !== false,
+          threshold: typeof data.threshold === 'number' ? data.threshold : 500,
+          pageSize: typeof data.pageSize === 'number' ? data.pageSize : 200,
+        };
+        if (typeof window !== 'undefined' && window.localStorage) {
+          try {
+            window.localStorage.setItem(PAGINATION_CONFIG_KEY, JSON.stringify(this.paginationConfig));
+          } catch (e) {}
+        }
+        this.notify();
+      }
+    } catch (e) {
+      // ignore
+    }
+    return this.paginationConfig;
+  }
+
+  /**
+   * 保存并广播分页配置
+   */
+  public async savePaginationConfig(config: Partial<IconPaginationConfig>, client?: any): Promise<IconPaginationConfig> {
+    const api = client || this.apiClient;
+    const nextConfig: IconPaginationConfig = {
+      enablePagination: config.enablePagination !== undefined ? Boolean(config.enablePagination) : this.paginationConfig.enablePagination,
+      threshold: typeof config.threshold === 'number' ? Math.max(0, config.threshold) : this.paginationConfig.threshold,
+      pageSize: typeof config.pageSize === 'number' ? Math.max(10, config.pageSize) : this.paginationConfig.pageSize,
+    };
+    this.paginationConfig = nextConfig;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(PAGINATION_CONFIG_KEY, JSON.stringify(nextConfig));
+      } catch (e) {}
+    }
+    this.notify();
+
+    if (api) {
+      try {
+        await api.request({
+          url: 'customIconRepos:saveSettings',
+          method: 'post',
+          data: nextConfig,
+        });
+      } catch (e) {
+        console.warn('Failed to save pagination settings to server:', e);
+      }
+    }
+    return nextConfig;
   }
 
   /**
@@ -757,6 +861,8 @@ class CustomIconsManager {
         this.isLoaded = true;
         this.notify();
       }
+      // 异步同步最新分页配置
+      void this.loadPaginationConfig(api);
     } catch (err) {
       console.warn('Failed to load custom icons from server, using local cache:', err);
     }
