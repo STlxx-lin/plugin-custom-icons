@@ -494,8 +494,8 @@ const DEFAULT_PAGINATION_SETTINGS: IconPaginationSettings = {
   enablePagination: true,
   threshold: 500,
   pageSize: 200,
-  marketPreviewCount: 5,
-  popoverWidth: 'adaptive',
+  marketPreviewCount: 10,
+  popoverWidth: 'wide',
 };
 
 export function readPaginationSettings(): IconPaginationSettings {
@@ -507,8 +507,8 @@ export function readPaginationSettings(): IconPaginationSettings {
         enablePagination: data.enablePagination !== false,
         threshold: typeof data.threshold === 'number' ? data.threshold : 500,
         pageSize: typeof data.pageSize === 'number' ? data.pageSize : 200,
-        marketPreviewCount: typeof data.marketPreviewCount === 'number' ? data.marketPreviewCount : 5,
-        popoverWidth: typeof data.popoverWidth === 'string' && data.popoverWidth ? data.popoverWidth : 'adaptive',
+        marketPreviewCount: typeof data.marketPreviewCount === 'number' ? data.marketPreviewCount : 10,
+        popoverWidth: typeof data.popoverWidth === 'string' && data.popoverWidth ? data.popoverWidth : 'wide',
         subCategories: data.subCategories && typeof data.subCategories === 'object' ? data.subCategories : undefined,
       };
     }
@@ -527,8 +527,8 @@ export function writePaginationSettings(settings: Partial<IconPaginationSettings
     marketPreviewCount:
       typeof settings.marketPreviewCount === 'number'
         ? Math.min(30, Math.max(1, settings.marketPreviewCount))
-        : (current.marketPreviewCount || 5),
-    popoverWidth: typeof settings.popoverWidth === 'string' && settings.popoverWidth.trim() ? settings.popoverWidth.trim() : (current.popoverWidth || 'adaptive'),
+        : (current.marketPreviewCount || 10),
+    popoverWidth: typeof settings.popoverWidth === 'string' && settings.popoverWidth.trim() ? settings.popoverWidth.trim() : (current.popoverWidth || 'wide'),
     subCategories: settings.subCategories !== undefined ? settings.subCategories : current.subCategories,
   };
   try {
@@ -595,7 +595,7 @@ export const createCustomIconReposResource = (app: any, resourceName = 'customIc
       );
 
       const paginationSettings = readPaginationSettings();
-      const previewLimit = paginationSettings.marketPreviewCount || 5;
+      const previewLimit = paginationSettings.marketPreviewCount || 10;
 
       // 2. 追加用户通过 Prefix 自定义安装的外部 Iconify 或 Iconfont 集合
       const customInstalledList: any[] = [];

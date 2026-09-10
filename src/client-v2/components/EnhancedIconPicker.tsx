@@ -651,21 +651,21 @@ function EnhancedIconField(props: IconPickerProps) {
   };
 
   const showSubSidebar = currentSubCategories.length > 1 && !searchVal.trim();
-  const effectiveWidthConfig = props.popoverWidth || paginationConfig.popoverWidth || 'adaptive';
+  const effectiveWidthConfig = props.popoverWidth || paginationConfig.popoverWidth || 'wide';
 
-  let resolvedWidth: string = showSubSidebar ? 'clamp(35em, 52vw, 54em)' : 'clamp(28em, 42vw, 46em)';
-  if (effectiveWidthConfig && effectiveWidthConfig !== 'adaptive') {
-    if (effectiveWidthConfig === 'standard') {
-      resolvedWidth = showSubSidebar ? '35em' : '28em';
-    } else if (effectiveWidthConfig === 'wide') {
-      resolvedWidth = showSubSidebar ? '44em' : '36em';
-    } else if (effectiveWidthConfig === 'extra-wide') {
-      resolvedWidth = showSubSidebar ? '54em' : '44em';
-    } else if (effectiveWidthConfig === 'compact') {
-      resolvedWidth = showSubSidebar ? '30em' : '24em';
-    } else {
-      resolvedWidth = effectiveWidthConfig;
-    }
+  let resolvedWidth: string = showSubSidebar ? '44em' : '36em';
+  if (effectiveWidthConfig === 'adaptive') {
+    resolvedWidth = showSubSidebar ? 'clamp(35em, 52vw, 54em)' : 'clamp(28em, 42vw, 46em)';
+  } else if (effectiveWidthConfig === 'standard') {
+    resolvedWidth = showSubSidebar ? '35em' : '28em';
+  } else if (effectiveWidthConfig === 'wide') {
+    resolvedWidth = showSubSidebar ? '44em' : '36em';
+  } else if (effectiveWidthConfig === 'extra-wide') {
+    resolvedWidth = showSubSidebar ? '54em' : '44em';
+  } else if (effectiveWidthConfig === 'compact') {
+    resolvedWidth = showSubSidebar ? '30em' : '24em';
+  } else if (effectiveWidthConfig) {
+    resolvedWidth = effectiveWidthConfig;
   }
 
   const containerStyle: React.CSSProperties = {

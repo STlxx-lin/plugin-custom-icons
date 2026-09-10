@@ -29,8 +29,8 @@ export const DEFAULT_PAGINATION_CONFIG: IconPaginationConfig = {
   enablePagination: true,
   threshold: 500,
   pageSize: 200,
-  marketPreviewCount: 5,
-  popoverWidth: 'adaptive',
+  marketPreviewCount: 10,
+  popoverWidth: 'wide',
 };
 
 export interface RawSubCategoryConfig {
@@ -398,8 +398,8 @@ class CustomIconsManager {
           enablePagination: parsed.enablePagination !== false,
           threshold: typeof parsed.threshold === 'number' ? parsed.threshold : 500,
           pageSize: typeof parsed.pageSize === 'number' ? parsed.pageSize : 200,
-          marketPreviewCount: typeof parsed.marketPreviewCount === 'number' ? parsed.marketPreviewCount : 5,
-          popoverWidth: typeof parsed.popoverWidth === 'string' && parsed.popoverWidth ? parsed.popoverWidth : 'adaptive',
+          marketPreviewCount: typeof parsed.marketPreviewCount === 'number' ? parsed.marketPreviewCount : 10,
+          popoverWidth: typeof parsed.popoverWidth === 'string' && parsed.popoverWidth ? parsed.popoverWidth : 'wide',
         };
       }
     } catch (e) {}
@@ -428,8 +428,8 @@ class CustomIconsManager {
           enablePagination: data.enablePagination !== false,
           threshold: typeof data.threshold === 'number' ? data.threshold : 500,
           pageSize: typeof data.pageSize === 'number' ? data.pageSize : 200,
-          marketPreviewCount: typeof data.marketPreviewCount === 'number' ? data.marketPreviewCount : 5,
-          popoverWidth: typeof data.popoverWidth === 'string' && data.popoverWidth ? data.popoverWidth : 'adaptive',
+          marketPreviewCount: typeof data.marketPreviewCount === 'number' ? data.marketPreviewCount : 10,
+          popoverWidth: typeof data.popoverWidth === 'string' && data.popoverWidth ? data.popoverWidth : 'wide',
         };
         if (typeof window !== 'undefined' && window.localStorage) {
           try {
@@ -456,11 +456,11 @@ class CustomIconsManager {
       marketPreviewCount:
         typeof config.marketPreviewCount === 'number'
           ? Math.min(30, Math.max(1, config.marketPreviewCount))
-          : (this.paginationConfig.marketPreviewCount || 5),
+          : (this.paginationConfig.marketPreviewCount || 10),
       popoverWidth:
         typeof config.popoverWidth === 'string' && config.popoverWidth.trim()
           ? config.popoverWidth.trim()
-          : (this.paginationConfig.popoverWidth || 'adaptive'),
+          : (this.paginationConfig.popoverWidth || 'wide'),
     };
     this.paginationConfig = nextConfig;
     if (typeof window !== 'undefined' && window.localStorage) {

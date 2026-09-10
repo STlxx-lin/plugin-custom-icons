@@ -81,7 +81,7 @@ export const CustomIconsSettingsPage: React.FC<{ api: any }> = ({ api }) => {
 
   const handleResetPaginationSettings = () => {
     setPaginationSettings({ ...DEFAULT_PAGINATION_CONFIG });
-    message.info('已重置为系统推荐默认值（开启分页、阈值 500、每页 200、自适应宽度），请点击「保存配置」完成持久化。');
+    message.info('已重置为系统推荐默认值（开启分页、阈值 500、每页 200、典型展示 10 款、宽屏 44em），请点击「保存配置」完成持久化。');
   };
 
   const handleDelete = async (record: CustomIconItem) => {
@@ -379,11 +379,11 @@ export const CustomIconsSettingsPage: React.FC<{ api: any }> = ({ api }) => {
                           min={1}
                           max={30}
                           step={1}
-                          value={paginationSettings.marketPreviewCount ?? 5}
+                          value={paginationSettings.marketPreviewCount ?? 10}
                           onChange={(val) =>
                             setPaginationSettings((prev) => ({
                               ...prev,
-                              marketPreviewCount: Math.min(30, Math.max(1, Number(val) || 5)),
+                              marketPreviewCount: Math.min(30, Math.max(1, Number(val) || 10)),
                             }))
                           }
                           style={{ width: 140 }}
@@ -398,14 +398,14 @@ export const CustomIconsSettingsPage: React.FC<{ api: any }> = ({ api }) => {
                         <div>
                           <div style={{ fontWeight: 600, fontSize: 14 }}>图标选择器弹窗宽度 (Popover Width)</div>
                           <Text type="secondary" style={{ fontSize: 12 }}>
-                            配置全站图标选择器弹窗浮层的显示宽度。支持自适应伸缩（根据屏幕与子分类自动计算最佳视野）、预设宽度规格或自定义 CSS 宽度。
+                            配置全站图标选择器弹窗浮层的显示宽度。支持宽屏大视野（推荐默认）、自适应伸缩（根据屏幕与子分类自动计算最佳视野）、预设宽度规格或自定义 CSS 宽度。
                           </Text>
                         </div>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                           <Select
                             value={
-                              ['adaptive', 'standard', 'wide', 'extra-wide', 'compact'].includes(paginationSettings.popoverWidth || 'adaptive')
-                                ? (paginationSettings.popoverWidth || 'adaptive')
+                              ['wide', 'adaptive', 'standard', 'extra-wide', 'compact'].includes(paginationSettings.popoverWidth || 'wide')
+                                ? (paginationSettings.popoverWidth || 'wide')
                                 : 'custom'
                             }
                             onChange={(val) => {
@@ -415,17 +415,17 @@ export const CustomIconsSettingsPage: React.FC<{ api: any }> = ({ api }) => {
                                 setPaginationSettings((prev) => ({ ...prev, popoverWidth: val }));
                               }
                             }}
-                            style={{ width: 170 }}
+                            style={{ width: 180 }}
                             options={[
-                              { label: '⚡ 自适应伸缩 (推荐)', value: 'adaptive' },
-                              { label: '📏 标准 (35em / 28em)', value: 'standard' },
-                              { label: '🖼️ 宽屏大视野 (44em)', value: 'wide' },
+                              { label: '🖼️ 宽屏大视野 (44em，推荐默认)', value: 'wide' },
+                              { label: '⚡ 自适应伸缩 (随屏幕自适应)', value: 'adaptive' },
+                              { label: '📏 标准紧凑 (35em / 28em)', value: 'standard' },
                               { label: '🖥️ 全景超宽 (54em)', value: 'extra-wide' },
-                              { label: '📱 紧凑模式 (30em)', value: 'compact' },
+                              { label: '📱 极窄模式 (30em)', value: 'compact' },
                               { label: '✏️ 自定义宽度', value: 'custom' },
                             ]}
                           />
-                          {!['adaptive', 'standard', 'wide', 'extra-wide', 'compact'].includes(paginationSettings.popoverWidth || 'adaptive') && (
+                          {!['wide', 'adaptive', 'standard', 'extra-wide', 'compact'].includes(paginationSettings.popoverWidth || 'wide') && (
                             <Input
                               placeholder="例如: 45em 或 600px"
                               value={paginationSettings.popoverWidth}

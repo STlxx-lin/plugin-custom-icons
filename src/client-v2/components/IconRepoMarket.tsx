@@ -1326,7 +1326,7 @@ export const IconRepoMarket: React.FC<IconRepoMarketProps> = ({ apiClient, onRep
                     }}
                   >
                     {(() => {
-                      const previewCount = customIconsManager.getPaginationConfig().marketPreviewCount || 5;
+                      const previewCount = customIconsManager.getPaginationConfig().marketPreviewCount || 10;
 
                       // 1. 已安装状态下：直接从本地已加载的图标池中精确匹配属于该仓库的前 N 个图标
                       if (isInstalled) {
