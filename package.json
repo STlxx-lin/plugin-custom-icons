@@ -5,6 +5,10 @@
   "description": "Custom SVG icons, external icon libraries import, and seamless integration with NocoBase IconPicker.",
   "description.zh-CN": "自定义SVG图标扩展、第三方图标库导入与原生图标选择器无缝集成增强。",
   "version": "0.1.2",
+  "scripts": {
+    "build": "nocobase-v1 build @nocobase/plugin-custom-icons",
+    "tar": "nocobase-v1 tar @nocobase/plugin-custom-icons"
+  },
   "main": "server.js",
   "client": "client.js",
   "files": [

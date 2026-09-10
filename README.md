@@ -36,8 +36,9 @@
 
 ---
 
-## 🚀 安装与启用
+## 🚀 安装与部署
 
+### 方式 1：源码环境编译与启用
 在 NocoBase 根目录下执行：
 
 ```bash
@@ -47,6 +48,8 @@ yarn nocobase build @nocobase/plugin-custom-icons
 # 启用插件
 yarn pm enable @nocobase/plugin-custom-icons
 ```
+
+
 
 ---
 

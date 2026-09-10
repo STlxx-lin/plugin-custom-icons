@@ -13,3 +13,9 @@ storage/
 .idea/
 .vscode/
 Thumbs.db
+
+# Release packages
+release/
+*.tgz
+*.tar.gz
+*.zip
