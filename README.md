@@ -48,8 +48,37 @@ yarn nocobase build @nocobase/plugin-custom-icons
 # 启用插件
 yarn pm enable @nocobase/plugin-custom-icons
 ```
+### 方式 2：使用官方打包产物 (.tgz) 导入
+在生产环境或其他 NocoBase 应用中，可通过官方命令行或插件管理器导入：
 
+```bash
+# 通过官方命令行导入插件包
+yarn nocobase plugin import storage/tar/@nocobase/plugin-custom-icons-0.1.4.tgz
 
+# 激活启用插件
+yarn pm enable @nocobase/plugin-custom-icons
+```
+
+也可以直接解压到目标系统的 `./storage/plugins/@nocobase/plugin-custom-icons` 目录下。
+
+---
+
+## 📦 官方标准打包构建
+
+本插件完全遵循 [NocoBase 官方插件构建规范](https://docs.nocobase.com/cn/plugin-development/build)。
+
+在项目根目录下执行以下命令即可生成官方标准插件发布包：
+
+```bash
+# 方案 A：一步构建并打包生成 .tgz
+yarn nocobase build @nocobase/plugin-custom-icons --tar
+
+# 方案 B：独立打包已构建插件
+yarn nocobase tar @nocobase/plugin-custom-icons
+```
+
+打包成功后，产物归档文件将自动生成于：
+`storage/tar/@nocobase/plugin-custom-icons-0.1.4.tgz`
 
 ---
 
