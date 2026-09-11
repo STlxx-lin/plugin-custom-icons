@@ -1,6 +1,13 @@
 # @nocobase/plugin-custom-icons
 
-[**简体中文**](README.md) | [English](README.en-US.md)
+<p align="left">
+  <b>简体中文</b> | <a href="./README_EN.md">English</a>
+</p>
+
+[![Views](https://komarev.com/ghpvc/?username=nocobase-plugin-custom-icons&color=007ec6&style=flat-square&label=Views)](https://github.com/STlxx-lin/nocobase-plugin-custom-icons)
+[![Version](https://img.shields.io/badge/version-v0.1.4-blue.svg)](https://github.com/STlxx-lin/nocobase-plugin-custom-icons/releases)
+[![NocoBase Version](https://img.shields.io/badge/NocoBase-2.x-brightgreen.svg)](https://www.nocobase.com)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 > **NocoBase 自定义图标库与海量 SVG 扩展插件 (Custom Icons Plugin for NocoBase)**  
 > 专为 NocoBase 打造的高性能、企业级自定义图标管理中心。不仅原生深度增强官方 `IconPicker` 图标选择器，提供一体化调色与字号配置能力，还内置海量精选开源图标库市场，深度整合阿里巴巴 Iconfont、Iconify、创造狮草莓等全球顶尖平台，支持在线合辑一键探测与批量导入，让您的 NocoBase 应用轻松拥有极致丰富、高度定制的矢量视觉体验。
