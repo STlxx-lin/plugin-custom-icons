@@ -107,7 +107,7 @@ export class PluginCustomIconsClientV2 extends Plugin {
     // 3. 在系统设置中挂载“自定义图标库”管理入口
     const manager = this.app.pluginSettingsManager as any;
     if (manager) {
-      const title = '自定义图标库';
+      const title = this.app?.i18n?.t ? this.app.i18n.t('Custom Icons') : '自定义图标库';
       const icon = 'AppstoreAddOutlined';
       const menuKey = 'custom-icons';
       const pageName = `${menuKey}.index`;
